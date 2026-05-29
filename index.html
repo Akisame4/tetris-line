@@ -205,32 +205,12 @@
     }
     .ctrl-label { font-size: 0.78rem; color: #556; }
 
-    /* 勝利宣言ボタン */
-    #declare-btn {
-      position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%);
-      background: linear-gradient(135deg,#8b1a2a,#5a0f1a);
-      color: #fff; border: 2px solid #e94560; border-radius: 10px;
-      padding: 11px 36px; font-size: 1rem; font-weight: bold;
-      cursor: pointer; pointer-events: auto; letter-spacing: 1px;
-      box-shadow: 0 0 18px rgba(233,69,96,0.4);
-      transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
-      white-space: nowrap;
-    }
-    #declare-btn:hover:not(:disabled) {
-      opacity: 0.9; transform: translateX(-50%) translateY(-2px);
-      box-shadow: 0 0 28px rgba(233,69,96,0.7);
-    }
-    #declare-btn:disabled { opacity: 0.22; cursor: default; box-shadow: none; }
     #post-game-btns {
       display: none; position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%);
       gap: 10px; white-space: nowrap; pointer-events: auto;
     }
     #post-game-btns.show { display: flex; }
     #post-game-btns .btn-primary { width: auto; padding: 10px 28px; font-size: 0.9rem; }
-    #penalty-hint {
-      display: none; position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
-      color: #e94560; font-size: 0.72rem; white-space: nowrap; pointer-events: none;
-    }
 
     /* ゲーム終了オーバーレイ */
     #gameover-overlay {
@@ -326,9 +306,6 @@
         <div id="preview-next"></div>
       </div>
     </div>
-
-    <button id="declare-btn">🏆 勝利宣言</button>
-    <div id="penalty-hint">ペナルティ中：この手番は宣言不可</div>
 
     <div id="post-game-btns">
       <button class="btn-primary" id="post-btn-reload">タイトルへ戻る</button>
@@ -529,15 +506,12 @@ async function autoRejoin({roomId, pid}) {
   if (!room.players?.[pid]) return;
   myId = pid; myRoomId = roomId; isHost = (room.host === pid);
   if (isHost) {
-    const ids = Object.keys(room.players);
-    const penReset = Object.fromEntries(ids.map(p=>[`players/${p}/penaltyTurn`, false]));
     await update(ref(db, `rooms/${roomId}`), {
       status:'waiting', board:makeEmptyBoard(),
       currentTurn:null, turnOrder:null, turnIndex:0,
       currentMino:null, winner:null, endReason:null, winFace:null, rematchTs:null,
-      holdMino: Object.fromEntries(ids.map(p=>[p, null])),
-      nextMino: Object.fromEntries(ids.map(p=>[p, randomMino()])),
-      ...penReset,
+      holdMino: Object.fromEntries(Object.keys(room.players).map(p=>[p, null])),
+      nextMino: Object.fromEntries(Object.keys(room.players).map(p=>[p, randomMino()])),
     });
   }
   enterWaiting(roomId);
@@ -566,7 +540,7 @@ window.createRoom = async function() {
   await set(ref(db,`rooms/${roomId}`), {
     status:'waiting', host:pid,
     board:makeEmptyBoard(), currentTurn:null, turnOrder:null, turnIndex:0,
-    players:{[pid]:{name,colorIndex:0,penaltyTurn:false}}
+    players:{[pid]:{name,colorIndex:0}}
   });
   myId=pid; myRoomId=roomId; isHost=true;
   enterWaiting(roomId);
@@ -588,7 +562,7 @@ window.joinRoom = async function() {
   if(count>=4){showLobbyError('このルームは満員です（4人）');setLobbyDisabled(false);return;}
 
   const pid=makeId();
-  await update(ref(db,`rooms/${roomId}/players/${pid}`),{name,colorIndex:count,penaltyTurn:false});
+  await update(ref(db,`rooms/${roomId}/players/${pid}`),{name,colorIndex:count});
   myId=pid; myRoomId=roomId; isHost=false;
   enterWaiting(roomId);
 };
@@ -955,8 +929,6 @@ async function initGame(db, roomId, myId) {
     updateHoldHUD(holdMinoCache);
     if(isMyTurn){holdUsed=false;setControlsActive(true);}else setControlsActive(false);
     syncHoldPanel();
-    updateDeclareBtn();
-    document.getElementById('declare-btn').addEventListener('click',doDeclare);
     document.getElementById('btn-reload').addEventListener('click',()=>location.reload());
     document.getElementById('post-btn-reload').addEventListener('click',()=>location.reload());
     document.getElementById('post-btn-rematch').addEventListener('click',async()=>{
@@ -1004,7 +976,6 @@ async function initGame(db, roomId, myId) {
     playersCache=snap.val()||{};
     renderHudPlayers(playersCache,activeTurnCache);
     updateTurnBanner(activeTurnCache);
-    updateDeclareBtn();
   });
 
   onValue(ref(db,`rooms/${roomId}/winner`), snap=>{
@@ -1277,19 +1248,6 @@ async function initGame(db, roomId, myId) {
     );
   }
 
-  // 勝利宣言実行
-  async function doDeclare(){
-    const myPlayer=playersCache[myId];
-    if(!myPlayer||myPlayer.penaltyTurn) return;
-    if(!localBoard) return;
-    if(checkPlayerVictory(localBoard,myPlayer.colorIndex??0)){
-      const winFace=findWinningFace(localBoard,myPlayer.colorIndex??0)||'top';
-      await update(ref(db,`rooms/${roomId}`),{status:'finished',endReason:'declared',winner:myId,winFace});
-    } else {
-      await update(ref(db,`rooms/${roomId}/players/${myId}`),{penaltyTurn:true});
-    }
-  }
-
   // ゲーム終了表示
   function showGameOver(winnerId, endReason, winFace){
     const medals=['🥇','🥈','🥉','🏅'];
@@ -1298,17 +1256,7 @@ async function initGame(db, roomId, myId) {
 
     // 理由テキスト
     const reasonEl=document.getElementById('gameover-reason');
-    if(reasonEl){
-      if(endReason==='declared'){
-        const wp=playersCache[winnerId];
-        const wname=wp?`<span style="color:${PLAYER_COLORS_HEX[wp.colorIndex??0]};font-weight:bold">${esc(wp.name)}</span>`:' ';
-        const FACE_NAMES={top:'上面',front:'前面(-Z)',back:'後面(+Z)',left:'左面(-X)',right:'右面(+X)'};
-        const faceTxt=winFace?`<br><small style="color:#aaddff;font-size:0.85em">${FACE_NAMES[winFace]||winFace}で7連成立</small>`:'';
-        reasonEl.innerHTML=`${wname} が勝利宣言！${faceTxt}`;
-      } else {
-        reasonEl.textContent='盤面満杯 — 見えるマス数で順位決定';
-      }
-    }
+    if(reasonEl) reasonEl.textContent='盤面満杯 — 見えるマス数で順位決定';
 
     // ランキング行
     const ranksEl=document.getElementById('gameover-rankings');
@@ -1329,8 +1277,6 @@ async function initGame(db, roomId, myId) {
     gameFinished=true;
     setControlsActive(false);
     syncMino(null); // ミノを消す
-    document.getElementById('declare-btn').style.display='none';
-    document.getElementById('penalty-hint').style.display='none';
     document.getElementById('post-game-btns').classList.add('show');
 
     const overlay=document.getElementById('gameover-overlay');
@@ -1340,16 +1286,6 @@ async function initGame(db, roomId, myId) {
     overlay?.addEventListener('click', e=>{
       if(e.target===overlay) overlay.classList.remove('show');
     }, {once:false});
-  }
-
-  // 宣言ボタン有効/無効切り替え
-  function updateDeclareBtn(){
-    const btn=document.getElementById('declare-btn');
-    const hint=document.getElementById('penalty-hint');
-    if(!btn) return;
-    const hasPenalty=!!(playersCache[myId]?.penaltyTurn);
-    btn.disabled=hasPenalty;
-    if(hint) hint.style.display=hasPenalty?'block':'none';
   }
 
   // ロック＆ターン進行
@@ -1378,7 +1314,6 @@ async function initGame(db, roomId, myId) {
       const rankings=computeRankings(board,playersCache);
       await update(ref(db,`rooms/${roomId}`),{
         board,
-        [`players/${myId}/penaltyTurn`]:false,
         status:'finished',
         endReason:'full',
         winner:rankings[0]?.pid||null,
@@ -1393,7 +1328,6 @@ async function initGame(db, roomId, myId) {
       turnIndex:   nextIdx,
       currentMino: {type:nextType,pivotX:3,pivotY:22,pivotZ:3,mat:[...ID_MAT],owner:nextPid},
       [`nextMino/${nextPid}`]: randomMino(),
-      [`players/${myId}/penaltyTurn`]: false,
     });
 
     holdUsed=false;
