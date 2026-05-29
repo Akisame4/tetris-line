@@ -695,6 +695,10 @@ window.copyRoomId = function() {
 //  Three.js ゲーム本体
 // ============================================================
 async function initGame(db, roomId, myId) {
+  // --- 高さ設定を最初に取得 ---
+  const _hSnap=await get(ref(db,`rooms/${roomId}/height`));
+  const HEIGHT=_hSnap.val()||10;
+
   const canvas=document.getElementById('game-canvas');
   let W=window.innerWidth, H=window.innerHeight;
 
@@ -958,10 +962,6 @@ async function initGame(db, roomId, myId) {
       ghostGroup.add(edge);
     });
   }
-
-  // --- 高さ設定を先に取得 ---
-  const _hSnap=await get(ref(db,`rooms/${roomId}/height`));
-  const HEIGHT=_hSnap.val()||10;
 
   // --- 初期データ一括取得（リスナー登録前に全キャッシュを確定）---
   {
