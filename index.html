@@ -512,6 +512,7 @@ async function autoRejoin({roomId, pid}) {
       currentMino:null, winner:null, endReason:null, winFace:null, rematchTs:null,
       holdMino: Object.fromEntries(Object.keys(room.players).map(p=>[p, null])),
       nextMino: Object.fromEntries(Object.keys(room.players).map(p=>[p, randomMino()])),
+      ...Object.fromEntries(Object.keys(room.players).map(p=>[`players/${p}/score`, 0])),
     });
   }
   enterWaiting(roomId);
@@ -540,7 +541,7 @@ window.createRoom = async function() {
   await set(ref(db,`rooms/${roomId}`), {
     status:'waiting', host:pid,
     board:makeEmptyBoard(), currentTurn:null, turnOrder:null, turnIndex:0,
-    players:{[pid]:{name,colorIndex:0}}
+    players:{[pid]:{name,colorIndex:0,score:0}}
   });
   myId=pid; myRoomId=roomId; isHost=true;
   enterWaiting(roomId);
@@ -562,7 +563,7 @@ window.joinRoom = async function() {
   if(count>=4){showLobbyError('このルームは満員です（4人）');setLobbyDisabled(false);return;}
 
   const pid=makeId();
-  await update(ref(db,`rooms/${roomId}/players/${pid}`),{name,colorIndex:count});
+  await update(ref(db,`rooms/${roomId}/players/${pid}`),{name,colorIndex:count,score:0});
   myId=pid; myRoomId=roomId; isHost=false;
   enterWaiting(roomId);
 };
@@ -1000,20 +1001,19 @@ async function initGame(db, roomId, myId) {
   // --- HUD 更新 ---
   function renderHudPlayers(players,activeTid){
     const sorted=Object.entries(players).sort((a,b)=>a[1].colorIndex-b[1].colorIndex);
-    const visCounts=localBoard?countVisibleBlocks(localBoard):[0,0,0,0,0];
     document.getElementById('hud-players').innerHTML=
       '<div class="hud-section-label">Players / Next</div>' +
       sorted.map(([pid,p])=>{
         const color=PLAYER_COLORS_HEX[p.colorIndex];
         const nextType=nextMinoCache[pid]??null;
-        const score=visCounts[(p.colorIndex??0)+1]||0;
+        const score=p.score||0;
         return `
           <div class="hud-player ${pid===activeTid?'hud-active':''}">
             <div class="hud-player-info">
               <span class="hud-dot" style="background:${color}"></span>
               <span>${esc(p.name)}${pid===myId?'<span class="hud-you"> あなた</span>':''}</span>
             </div>
-            <span style="color:${color};font-size:0.78rem;font-weight:bold;min-width:28px;text-align:right">${score}</span>
+            <span style="color:${color};font-size:0.78rem;font-weight:bold;min-width:28px;text-align:right">${score}pt</span>
             <div class="mini-preview-grid">${buildMiniPreview(nextType,color)}</div>
           </div>`;
       }).join('');
@@ -1222,21 +1222,44 @@ async function initGame(db, roomId, myId) {
     return null;
   }
 
-  // 5面投影でプレイヤーごとの見えるマス数を集計
-  function countVisibleBlocks(board){
-    const counts=[0,0,0,0,0]; // index 1〜4
-    for(const face of ['top','front','back','left','right']){
-      const proj=getProjection(board,face);
-      for(const row of proj) for(const v of row) if(v) counts[v]++;
+  // 新たに完成したラインを検出（横:X方向 / 奥行:Z方向）
+  function detectNewLines(oldBoard, newBoard){
+    const lines=[];
+    for(let y=0;y<20;y++){
+      for(let z=0;z<7;z++){
+        const wasOk=oldBoard&&[0,1,2,3,4,5,6].every(x=>(oldBoard[y]?.[z]?.[x]??0)!==0);
+        const isOk=[0,1,2,3,4,5,6].every(x=>(newBoard[y]?.[z]?.[x]??0)!==0);
+        if(!wasOk&&isOk) lines.push({dir:'x',y,z});
+      }
+      for(let x=0;x<7;x++){
+        const wasOk=oldBoard&&[0,1,2,3,4,5,6].every(z=>(oldBoard[y]?.[z]?.[x]??0)!==0);
+        const isOk=[0,1,2,3,4,5,6].every(z=>(newBoard[y]?.[z]?.[x]??0)!==0);
+        if(!wasOk&&isOk) lines.push({dir:'z',y,x});
+      }
     }
-    return counts;
+    return lines;
+  }
+
+  // 完成ラインの色別マス数 → プレイヤーIDごとの加算ポイントを返す
+  function calcLineScores(lines, board, players){
+    const additions={};
+    for(const line of lines){
+      const cells=line.dir==='x'
+        ? [0,1,2,3,4,5,6].map(x=>board[line.y][line.z][x])
+        : [0,1,2,3,4,5,6].map(z=>board[line.y][z][line.x]);
+      for(const colorVal of cells){
+        if(!colorVal) continue;
+        const pid=Object.entries(players).find(([,p])=>(p.colorIndex??0)===colorVal-1)?.[0];
+        if(pid) additions[pid]=(additions[pid]||0)+1;
+      }
+    }
+    return additions;
   }
 
   // スコア順にソートしたランキング配列を返す
-  function computeRankings(board,players){
-    const counts=countVisibleBlocks(board);
+  function computeRankings(players){
     return Object.entries(players)
-      .map(([pid,p])=>({pid,name:p.name,colorIndex:p.colorIndex??0,score:counts[(p.colorIndex??0)+1]||0}))
+      .map(([pid,p])=>({pid,name:p.name,colorIndex:p.colorIndex??0,score:p.score||0}))
       .sort((a,b)=>b.score-a.score);
   }
 
@@ -1251,12 +1274,11 @@ async function initGame(db, roomId, myId) {
   // ゲーム終了表示
   function showGameOver(winnerId, endReason, winFace){
     const medals=['🥇','🥈','🥉','🏅'];
-    const rankings=localBoard&&Object.keys(playersCache).length
-      ? computeRankings(localBoard,playersCache) : [];
+    const rankings=Object.keys(playersCache).length ? computeRankings(playersCache) : [];
 
     // 理由テキスト
     const reasonEl=document.getElementById('gameover-reason');
-    if(reasonEl) reasonEl.textContent='盤面満杯 — 見えるマス数で順位決定';
+    if(reasonEl) reasonEl.textContent='盤面満杯 — ラインポイントで順位決定';
 
     // ランキング行
     const ranksEl=document.getElementById('gameover-rankings');
@@ -1268,7 +1290,7 @@ async function initGame(db, roomId, myId) {
           <div class="ranking-medal">${medals[i]||''}</div>
           <span class="ranking-dot" style="background:${color}"></span>
           <div class="ranking-name" style="color:${isWin?color:'#cde'}">${esc(r.name)}${r.pid===myId?' <small style="color:#556;font-weight:normal">あなた</small>':''}</div>
-          <div class="ranking-score"><b>${r.score}</b> マス</div>
+          <div class="ranking-score"><b>${r.score}</b> pt</div>
         </div>`;
       }).join('');
     }
@@ -1309,11 +1331,22 @@ async function initGame(db, roomId, myId) {
     const nextPid=order[nextIdx];
     const nextType=(room.nextMino||{})[nextPid]??randomMino();
 
-    // 終了チェック：デッドライン(y=19)を超えたら終了
+    // ライン完成チェック → スコア加算
+    const newLines=detectNewLines(localBoard, board);
+    const scoreAdd=newLines.length>0 ? calcLineScores(newLines, board, playersCache) : {};
+    const scoreUpdates=Object.fromEntries(
+      Object.entries(scoreAdd).map(([pid,pts])=>[`players/${pid}/score`,(playersCache[pid]?.score||0)+pts])
+    );
+
+    // 終了チェック：デッドライン(y=20)を超えたら終了
     if(blocks.some(([,y,])=>y>=20)){
-      const rankings=computeRankings(board,playersCache);
+      const updatedPlayers={...playersCache};
+      for(const [pid,pts] of Object.entries(scoreAdd))
+        updatedPlayers[pid]={...updatedPlayers[pid],score:(updatedPlayers[pid]?.score||0)+pts};
+      const rankings=computeRankings(updatedPlayers);
       await update(ref(db,`rooms/${roomId}`),{
         board,
+        ...scoreUpdates,
         status:'finished',
         endReason:'full',
         winner:rankings[0]?.pid||null,
@@ -1324,6 +1357,7 @@ async function initGame(db, roomId, myId) {
 
     await update(ref(db,`rooms/${roomId}`),{
       board,
+      ...scoreUpdates,
       currentTurn: nextPid,
       turnIndex:   nextIdx,
       currentMino: {type:nextType,pivotX:3,pivotY:22,pivotZ:3,mat:[...ID_MAT],owner:nextPid},
