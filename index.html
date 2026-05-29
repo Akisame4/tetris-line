@@ -60,6 +60,20 @@
     .error-msg { color: #e94560; font-size: 0.82rem; margin-top: -6px; margin-bottom: 8px; display: none; }
     .error-msg.show { display: block; }
 
+    /* 高さ選択 */
+    #height-selector { display: none; }
+    #height-selector.show { display: block; }
+    .height-btns { display: flex; gap: 8px; }
+    .height-btn {
+      flex: 1; padding: 11px 0; background: #0f3460; color: #aac;
+      border: 1px solid #2a4070; border-radius: 8px; cursor: pointer;
+      font-size: 0.95rem; font-weight: 600; transition: all 0.15s; width: auto;
+    }
+    .height-btn:hover { opacity: 0.85; }
+    .height-btn.active { background: #e94560; color: #fff; border-color: #e94560; }
+    #height-display { display: none; text-align: center; color: #7eb3ff; font-size: 0.9rem; margin-top: 4px; }
+    #height-display.show { display: block; }
+
     /* ===== ゲーム画面 ===== */
     #screen-game {
       position: fixed; inset: 0;
@@ -282,6 +296,19 @@
     <ul class="player-list" id="player-list"></ul>
     <p class="status-text" id="waiting-status">参加待ち...</p>
   </div>
+
+  <!-- ホストのみ表示 -->
+  <div class="card" id="height-selector">
+    <h2>盤面の高さ</h2>
+    <div class="height-btns">
+      <button class="height-btn active" data-h="10">10（デフォルト）</button>
+      <button class="height-btn"        data-h="15">15</button>
+      <button class="height-btn"        data-h="20">20</button>
+    </div>
+  </div>
+  <!-- 非ホスト表示 -->
+  <p id="height-display">盤面の高さ: <b id="height-display-val">—</b></p>
+
   <button class="btn-success" id="btn-start" onclick="startGame()" disabled>ゲームを開始する</button>
 </div>
 
@@ -479,6 +506,8 @@ const PLAYER_COLORS_HEX = ['#e74c3c','#3498db','#2ecc71','#f1c40f'];
 const MINO_TYPES = ['O','T','S','Z','J','L'];
 function randomMino() { return MINO_TYPES[Math.floor(Math.random()*6)]; }
 
+let selectedHeight = 10;
+
 // ============================================================
 //  Firebase
 // ============================================================
@@ -573,6 +602,24 @@ function enterWaiting(roomId) {
   document.getElementById('display-room-id').textContent=roomId;
   showScreen('waiting'); setLobbyDisabled(false);
 
+  // 高さ選択UI: ホストのみ表示
+  if(isHost){
+    document.getElementById('height-selector').classList.add('show');
+    document.querySelectorAll('.height-btn').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        selectedHeight=parseInt(btn.dataset.h);
+        document.querySelectorAll('.height-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+  } else {
+    document.getElementById('height-display').classList.add('show');
+    onValue(ref(db,`rooms/${roomId}/height`), snap=>{
+      const h=snap.val();
+      if(h) document.getElementById('height-display-val').textContent=h;
+    });
+  }
+
   onValue(ref(db,`rooms/${roomId}/players`), snap=>{
     const players=snap.val()||{};
     renderWaitingList(players);
@@ -620,16 +667,17 @@ window.startGame = async function() {
   const nextMino={};
   ids.forEach(pid=>nextMino[pid]=randomMino());
 
-  // 最初の currentMino
+  // 最初の currentMino（スポーンはheight+2）
   const currentMino={
     type:randomMino(),
-    pivotX:3, pivotY:22, pivotZ:3,
+    pivotX:3, pivotY:selectedHeight+2, pivotZ:3,
     mat:[...ID_MAT],
     owner:order[0]
   };
 
   await update(ref(db,`rooms/${myRoomId}`),{
-    status:'playing', turnOrder:order, currentTurn:order[0], turnIndex:0,
+    status:'playing', height:selectedHeight,
+    turnOrder:order, currentTurn:order[0], turnIndex:0,
     nextMino, currentMino,
     holdMino: Object.fromEntries(ids.map(pid=>[pid,null]))
   });
@@ -717,15 +765,15 @@ async function initGame(db, roomId, myId) {
 
   // --- 盤面ワイヤーフレーム ---
   const boardEdges=new THREE.LineSegments(
-    new THREE.EdgesGeometry(new THREE.BoxGeometry(7,20,7)),
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(7,HEIGHT,7)),
     new THREE.LineBasicMaterial({color:0x1e3a6e})
   );
-  boardEdges.position.set(3.5,10,3.5); scene.add(boardEdges);
+  boardEdges.position.set(3.5,HEIGHT/2,3.5); scene.add(boardEdges);
 
   const floor=new THREE.GridHelper(7,7,0x1e3a6e,0x162d55);
   floor.position.set(3.5,0,3.5); scene.add(floor);
 
-  for(let y=5;y<20;y+=5){
+  for(let y=5;y<HEIGHT;y+=5){
     const pts=[];
     for(let i=0;i<=7;i++){pts.push(0,y,i,7,y,i);pts.push(i,y,0,i,y,7);}
     const geo=new THREE.BufferGeometry();
@@ -735,14 +783,14 @@ async function initGame(db, roomId, myId) {
   for(let x=1;x<7;x++) for(let z=0;z<=7;z++) addVLine(x,z);
   for(let z=1;z<7;z++) for(let x=0;x<=7;x++) addVLine(x,z);
   function addVLine(x,z){
-    const geo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x,0,z),new THREE.Vector3(x,20,z)]);
+    const geo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x,0,z),new THREE.Vector3(x,HEIGHT,z)]);
     scene.add(new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:0x182035,transparent:true,opacity:0.35})));
   }
 
-  // --- 天井（y=20）強調 ---
+  // --- 天井（y=HEIGHT）強調 ---
   {
     const ceilPts=[];
-    for(let i=0;i<=7;i++){ceilPts.push(0,20,i,7,20,i);ceilPts.push(i,20,0,i,20,7);}
+    for(let i=0;i<=7;i++){ceilPts.push(0,HEIGHT,i,7,HEIGHT,i);ceilPts.push(i,HEIGHT,0,i,HEIGHT,7);}
     const ceilGeo=new THREE.BufferGeometry();
     ceilGeo.setAttribute('position',new THREE.Float32BufferAttribute(ceilPts,3));
     scene.add(new THREE.LineSegments(ceilGeo,new THREE.LineBasicMaterial({color:0xff3322,transparent:true,opacity:0.9})));
@@ -751,7 +799,7 @@ async function initGame(db, roomId, myId) {
       new THREE.MeshBasicMaterial({color:0xff2200,transparent:true,opacity:0.13,side:THREE.DoubleSide,depthWrite:false})
     );
     ceilPlane.rotation.x=Math.PI/2;
-    ceilPlane.position.set(3.5,20,3.5);
+    ceilPlane.position.set(3.5,HEIGHT,3.5);
     scene.add(ceilPlane);
   }
 
@@ -813,11 +861,11 @@ async function initGame(db, roomId, myId) {
     placedMap.forEach(({mesh,edge})=>{scene.remove(mesh);scene.remove(edge);});
     placedMap.clear();
     if(!board) return;
-    for(let y=0;y<21;y++) for(let z=0;z<7;z++) for(let x=0;x<7;x++){
+    for(let y=0;y<HEIGHT+1;y++) for(let z=0;z<7;z++) for(let x=0;x<7;x++){
       const val=board[y]?.[z]?.[x]; if(!val) continue;
       const ci=val-1;
       const pos=new THREE.Vector3(x+0.5,y+0.5,z+0.5);
-      const isOver=y>=20;
+      const isOver=y>=HEIGHT;
       const mesh=new THREE.Mesh(cubeGeo, isOver?overMat:cubeMats[ci]);
       const edge=new THREE.LineSegments(edgeGeo, isOver?overEdgeMat:edgeMats[ci]);
       mesh.position.copy(pos); edge.position.copy(pos);
@@ -889,7 +937,7 @@ async function initGame(db, roomId, myId) {
     const ci=playersCache[mino.owner]?.colorIndex??0;
 
     blocks.forEach(([x,y,z])=>{
-      if(y<0||y>=23||x<0||x>=7||z<0||z>=7) return;
+      if(y<0||y>=HEIGHT+3||x<0||x>=7||z<0||z>=7) return;
       const pos=new THREE.Vector3(x+0.5,y+0.5,z+0.5);
       const mesh=new THREE.Mesh(cubeGeo,cubeMats[ci]);
       const edge=new THREE.LineSegments(edgeGeo,edgeMats[ci]);
@@ -910,6 +958,10 @@ async function initGame(db, roomId, myId) {
       ghostGroup.add(edge);
     });
   }
+
+  // --- 高さ設定を先に取得 ---
+  const _hSnap=await get(ref(db,`rooms/${roomId}/height`));
+  const HEIGHT=_hSnap.val()||10;
 
   // --- 初期データ一括取得（リスナー登録前に全キャッシュを確定）---
   {
@@ -1093,7 +1145,7 @@ async function initGame(db, roomId, myId) {
   // ブロック全座標の有効チェック（境界 + 衝突）
   function isValid(blocks){
     return blocks.every(([x,y,z])=>
-      x>=0&&x<7&&y>=0&&y<23&&z>=0&&z<7&&
+      x>=0&&x<7&&y>=0&&y<HEIGHT+3&&z>=0&&z<7&&
       (localBoard?.[y]?.[z]?.[x]??0)===0
     );
   }
@@ -1225,7 +1277,7 @@ async function initGame(db, roomId, myId) {
   // 新たに完成したラインを検出（横:X方向 / 奥行:Z方向）
   function detectNewLines(oldBoard, newBoard){
     const lines=[];
-    for(let y=0;y<20;y++){
+    for(let y=0;y<HEIGHT;y++){
       for(let z=0;z<7;z++){
         const wasOk=oldBoard&&[0,1,2,3,4,5,6].every(x=>(oldBoard[y]?.[z]?.[x]??0)!==0);
         const isOk=[0,1,2,3,4,5,6].every(x=>(newBoard[y]?.[z]?.[x]??0)!==0);
@@ -1265,9 +1317,9 @@ async function initGame(db, roomId, myId) {
 
   // スポーン位置に新しいミノが置けるか確認
   function canSpawn(board,type){
-    const blocks=getMinoBlocks({type,pivotX:3,pivotY:22,pivotZ:3,mat:[...ID_MAT],owner:null});
+    const blocks=getMinoBlocks({type,pivotX:3,pivotY:HEIGHT+2,pivotZ:3,mat:[...ID_MAT],owner:null});
     return blocks.every(([x,y,z])=>
-      x>=0&&x<7&&y>=0&&y<20&&z>=0&&z<7&&(board[y]?.[z]?.[x]??0)===0
+      x>=0&&x<7&&y>=0&&y<HEIGHT&&z>=0&&z<7&&(board[y]?.[z]?.[x]??0)===0
     );
   }
 
@@ -1338,8 +1390,8 @@ async function initGame(db, roomId, myId) {
       Object.entries(scoreAdd).map(([pid,pts])=>[`players/${pid}/score`,(playersCache[pid]?.score||0)+pts])
     );
 
-    // 終了チェック：デッドライン(y=20)を超えたら終了
-    if(blocks.some(([,y,])=>y>=20)){
+    // 終了チェック：デッドライン到達
+    if(blocks.some(([,y,])=>y>=HEIGHT)){
       const updatedPlayers={...playersCache};
       for(const [pid,pts] of Object.entries(scoreAdd))
         updatedPlayers[pid]={...updatedPlayers[pid],score:(updatedPlayers[pid]?.score||0)+pts};
@@ -1360,7 +1412,7 @@ async function initGame(db, roomId, myId) {
       ...scoreUpdates,
       currentTurn: nextPid,
       turnIndex:   nextIdx,
-      currentMino: {type:nextType,pivotX:3,pivotY:22,pivotZ:3,mat:[...ID_MAT],owner:nextPid},
+      currentMino: {type:nextType,pivotX:3,pivotY:HEIGHT+2,pivotZ:3,mat:[...ID_MAT],owner:nextPid},
       [`nextMino/${nextPid}`]: randomMino(),
     });
 
