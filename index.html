@@ -104,7 +104,7 @@
 
     /* プレイヤー一覧 + NEXT (右上) */
     #hud-players {
-      position: absolute; top: 52px; right: 16px;
+      position: absolute; top: 62px; right: 16px;
       background: rgba(10,18,40,0.9); border: 1px solid #2a4070;
       border-radius: 10px; padding: 12px 16px; backdrop-filter: blur(6px);
       min-width: 180px;
@@ -118,7 +118,7 @@
     .hud-active { font-weight: bold; }
     .mini-preview-grid {
       display: grid;
-      grid-template-columns: repeat(3, 11px);
+      grid-template-columns: repeat(4, 11px);
       grid-template-rows: repeat(2, 11px);
       gap: 1px; flex-shrink: 0;
     }
@@ -146,7 +146,7 @@
     /* ミノ 2Dプレビュー */
     .preview-grid {
       display: grid;
-      grid-template-columns: repeat(3, 18px);
+      grid-template-columns: repeat(4, 18px);
       grid-template-rows: repeat(2, 18px);
       gap: 3px; margin: 0 auto; width: fit-content;
     }
@@ -198,9 +198,22 @@
     #cam-hint .cam-keys { min-width: 100px; }
     #cam-hint .cam-label { font-size: 0.78rem; color: #556; }
 
-    /* 操作一覧パネル (右下) */
-    #controls-panel {
+    /* 操作一覧パネル + ガイド円トグル (右下) */
+    #bottom-right-panel {
       position: absolute; bottom: 16px; right: 16px;
+      display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+    }
+    #gizmo-toggle {
+      background: rgba(10,18,40,0.9); border: 1px solid #2a4070;
+      border-radius: 20px; padding: 5px 14px;
+      font-size: 0.72rem; color: #7eb3ff; cursor: pointer;
+      backdrop-filter: blur(6px); width: auto; font-weight: 500;
+      letter-spacing: 0.5px; transition: color 0.15s, border-color 0.15s;
+      pointer-events: auto;
+    }
+    #gizmo-toggle:hover { border-color: #4a80c0; }
+    #gizmo-toggle.off { color: #445; border-color: #1a2840; }
+    #controls-panel {
       background: rgba(10,18,40,0.9); border: 1px solid #2a4070;
       border-radius: 10px; padding: 12px 16px; backdrop-filter: blur(6px);
     }
@@ -371,6 +384,8 @@
       </div>
     </div>
 
+    <div id="bottom-right-panel">
+    <button id="gizmo-toggle">⊙ ガイド円</button>
     <div id="controls-panel">
       <div class="ctrl-title">操作（自分のターン）</div>
 
@@ -411,14 +426,19 @@
         <span class="ctrl-label">X軸回転（縦倒し）</span>
       </div>
       <div class="ctrl-row">
+        <div class="ctrl-keys"><kbd>↓</kbd></div>
+        <span class="ctrl-label">ソフトドロップ</span>
+      </div>
+      <div class="ctrl-row">
         <div class="ctrl-keys"><kbd>Space</kbd></div>
-        <span class="ctrl-label">落下・確定</span>
+        <span class="ctrl-label">ハードドロップ・確定</span>
       </div>
       <div class="ctrl-row">
         <div class="ctrl-keys"><kbd>Shift</kbd></div>
         <span class="ctrl-label">ホールド</span>
       </div>
     </div>
+    </div><!-- /#bottom-right-panel -->
   </div>
 </div>
 
@@ -426,6 +446,58 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+// ============================================================
+//  SE エンジン（モジュール内に直接定義）
+// ============================================================
+const _seCtx = (() => { try { return new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return null; } })();
+let _seVol = (() => { const v = parseFloat(localStorage.getItem('tn_se_volume')); return isNaN(v) ? 0.6 : v; })();
+window.seSetVol = v => { _seVol = v; };
+
+// キャプチャフェーズでコンテキストを事前再開（ゲームのキー処理より先に走る）
+if (_seCtx) {
+  ['click','keydown','touchstart'].forEach(ev =>
+    document.addEventListener(ev, () => _seCtx.resume().catch(()=>{}), { capture: true })
+  );
+}
+
+function _seTone(freq, type, dur, gain, startFreq) {
+  if (!_seCtx || _seCtx.state !== 'running') return;
+  const t = _seCtx.currentTime;
+  const osc = _seCtx.createOscillator();
+  const g = _seCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(startFreq || freq, t);
+  if (startFreq) osc.frequency.exponentialRampToValueAtTime(Math.max(freq, 10), t + dur);
+  g.gain.setValueAtTime(gain * _seVol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  osc.connect(g); g.connect(_seCtx.destination);
+  osc.start(t); osc.stop(t + dur);
+}
+function _seNoise(dur, gain, lp) {
+  if (!_seCtx || _seCtx.state !== 'running') return;
+  const t = _seCtx.currentTime;
+  const len = Math.ceil(_seCtx.sampleRate * dur);
+  const buf = _seCtx.createBuffer(1, len, _seCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = _seCtx.createBufferSource();
+  src.buffer = buf;
+  const g = _seCtx.createGain();
+  g.gain.setValueAtTime(gain * _seVol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  const f = _seCtx.createBiquadFilter();
+  f.type = 'lowpass'; f.frequency.value = lp || 800;
+  src.connect(f); f.connect(g); g.connect(_seCtx.destination);
+  src.start(t);
+}
+const seMove     = () => _seTone(200, 'sine', 0.07, 0.55, 260);
+const seRotate   = () => _seTone(300, 'sine', 0.09, 0.60, 220);
+const seSoftDrop = () => _seTone(160, 'square', 0.06, 0.45);
+const seHardDrop = () => { _seTone(80, 'sine', 0.22, 0.90, 130); _seNoise(0.18, 0.70, 400); };
+const seHold     = () => { _seTone(380, 'sine', 0.07, 0.60); setTimeout(() => _seTone(460, 'sine', 0.07, 0.55), 65); };
+const seLine     = n  => [523,659,784,1047].forEach((f,i) => setTimeout(() => _seTone(f,'sine',0.42,0.65+(n>1?0.15:0)),i*78));
+const seGameOver = () => [440,415,392,370,349].forEach((f,i) => setTimeout(() => _seTone(f,'sawtooth',0.38,0.55),i*148));
 
 // ============================================================
 //  ミノ定義
@@ -438,9 +510,10 @@ const MINO_DEFS = {
   Z: [[-1,0, 0],[0,0, 0],[0,0,1],[1,0,1]],
   J: [[-1,0,-1],[-1,0, 0],[0,0,0],[1,0,0]],
   L: [[ 1,0,-1],[-1,0, 0],[0,0,0],[1,0,0]],
+  I: [[-1,0, 0],[0,0, 0],[1,0,0],[2,0,0]],
 };
 
-// HUD用 2Dプレビュー (col,row) 3×2グリッド
+// HUD用 2Dプレビュー (col,row) 4×2グリッド
 const MINO_PREVIEW = {
   O: [[0,0],[1,0],[0,1],[1,1]],
   T: [[0,0],[1,0],[2,0],[1,1]],
@@ -448,6 +521,7 @@ const MINO_PREVIEW = {
   Z: [[0,0],[1,0],[1,1],[2,1]],
   J: [[0,0],[0,1],[1,1],[2,1]],
   L: [[2,0],[0,1],[1,1],[2,1]],
+  I: [[0,0],[1,0],[2,0],[3,0]],
 };
 
 // ============================================================
@@ -463,6 +537,29 @@ const ROT = {
   Xcw:  [1,0,0, 0,0,-1,0,1,0],  // 後ろ倒し
   Zccw: [0,-1,0,1,0,0, 0,0,1],  // 左ロール
   Zcw:  [0,1,0,-1,0,0, 0,0,1],  // 右ロール
+};
+
+// SRS壁キックテーブル（Y軸回転用・状態依存、XZ平面）
+// Tetris公式SRSデータ: kicks = [dx, dz]
+const SRS_Y_KICKS_I = {
+  '0_CW':  [[ 0,0],[-2,0],[ 1,0],[-2,-1],[ 1, 2]],
+  '1_CW':  [[ 0,0],[-1,0],[ 2,0],[-1, 2],[ 2,-1]],
+  '2_CW':  [[ 0,0],[ 2,0],[-1,0],[ 2, 1],[-1,-2]],
+  '3_CW':  [[ 0,0],[ 1,0],[-2,0],[ 1,-2],[-2, 1]],
+  '0_CCW': [[ 0,0],[-1,0],[ 2,0],[-1, 2],[ 2,-1]],
+  '1_CCW': [[ 0,0],[ 2,0],[-1,0],[ 2, 1],[-1,-2]],
+  '2_CCW': [[ 0,0],[ 1,0],[-2,0],[ 1,-2],[-2, 1]],
+  '3_CCW': [[ 0,0],[-2,0],[ 1,0],[-2,-1],[ 1, 2]],
+};
+const SRS_Y_KICKS = {
+  '0_CW':  [[ 0,0],[-1, 0],[-1, 1],[0,-2],[-1,-2]],
+  '1_CW':  [[ 0,0],[ 1, 0],[ 1,-1],[0, 2],[ 1, 2]],
+  '2_CW':  [[ 0,0],[ 1, 0],[ 1, 1],[0,-2],[ 1,-2]],
+  '3_CW':  [[ 0,0],[-1, 0],[-1,-1],[0, 2],[-1, 2]],
+  '0_CCW': [[ 0,0],[ 1, 0],[ 1, 1],[0,-2],[ 1,-2]],
+  '1_CCW': [[ 0,0],[ 1, 0],[ 1,-1],[0, 2],[ 1, 2]],
+  '2_CCW': [[ 0,0],[-1, 0],[-1, 1],[0,-2],[-1,-2]],
+  '3_CCW': [[ 0,0],[-1, 0],[-1,-1],[0, 2],[-1, 2]],
 };
 
 function applyMat(m, [x,y,z]) {
@@ -503,8 +600,8 @@ function calcGhost(blocks, board) {
 //  定数
 // ============================================================
 const PLAYER_COLORS_HEX = ['#e74c3c','#3498db','#2ecc71','#f1c40f'];
-const MINO_TYPES = ['O','T','S','Z','J','L'];
-function randomMino() { return MINO_TYPES[Math.floor(Math.random()*6)]; }
+const MINO_TYPES = ['O','T','S','Z','J','L','I'];
+function randomMino() { return MINO_TYPES[Math.floor(Math.random()*MINO_TYPES.length)]; }
 
 let selectedHeight = 10;
 
@@ -526,6 +623,16 @@ const app = initializeApp(firebaseConfig);
 const db  = getDatabase(app);
 
 let myId = null, myRoomId = null, isHost = false;
+
+// 名前の永続化
+{
+  const _nameInput=document.getElementById('input-name');
+  const _savedName=localStorage.getItem('tn_player_name');
+  if(_savedName) _nameInput.value=_savedName;
+  _nameInput.addEventListener('input',()=>{
+    localStorage.setItem('tn_player_name',_nameInput.value);
+  });
+}
 
 // ===== 再戦リジョイン =====
 async function autoRejoin({roomId, pid}) {
@@ -568,7 +675,7 @@ window.createRoom = async function() {
   const name=getPlayerName(), roomId=makeRoomId(), pid=makeId();
   setLobbyDisabled(true);
   await set(ref(db,`rooms/${roomId}`), {
-    status:'waiting', host:pid,
+    status:'waiting', host:pid, height:selectedHeight,
     board:makeEmptyBoard(), currentTurn:null, turnOrder:null, turnIndex:0,
     players:{[pid]:{name,colorIndex:0,score:0}}
   });
@@ -606,10 +713,11 @@ function enterWaiting(roomId) {
   if(isHost){
     document.getElementById('height-selector').classList.add('show');
     document.querySelectorAll('.height-btn').forEach(btn=>{
-      btn.addEventListener('click',()=>{
+      btn.addEventListener('click',async ()=>{
         selectedHeight=parseInt(btn.dataset.h);
         document.querySelectorAll('.height-btn').forEach(b=>b.classList.remove('active'));
         btn.classList.add('active');
+        await update(ref(db,`rooms/${myRoomId}`),{height:selectedHeight});
       });
     });
   } else {
@@ -671,7 +779,7 @@ window.startGame = async function() {
   const currentMino={
     type:randomMino(),
     pivotX:3, pivotY:selectedHeight+2, pivotZ:3,
-    mat:[...ID_MAT],
+    mat:[...ID_MAT], rotY:0,
     owner:order[0]
   };
 
@@ -881,6 +989,61 @@ async function initGame(db, roomId, myId) {
   // --- 操作中ミノ + ゴースト ---
   const minoGroup=new THREE.Group(); scene.add(minoGroup);
   const ghostGroup=new THREE.Group(); scene.add(ghostGroup);
+  const glowGroup=new THREE.Group(); scene.add(glowGroup);
+  let glowStartTime=null;
+  const GLOW_DURATION=1300;
+
+  // --- 回転ギズモ (Blender風3軸リング) ---
+  const gizmoGroup=new THREE.Group();
+  scene.add(gizmoGroup);
+  gizmoGroup.visible=false;
+
+  function makeRing(color,rx,ry,rz){
+    // 見た目用（fog無効・常に前面表示）
+    const vis=new THREE.Mesh(
+      new THREE.TorusGeometry(2.2,0.02,12,64),
+      new THREE.MeshBasicMaterial({color,side:THREE.DoubleSide,depthTest:false,transparent:true,opacity:0.38,fog:false})
+    );
+    vis.rotation.set(rx,ry,rz); vis.renderOrder=999;
+    gizmoGroup.add(vis);
+    // ヒット判定用（太い・不可視）―クリックしやすくするため
+    const hit=new THREE.Mesh(
+      new THREE.TorusGeometry(2.2,0.45,8,32),
+      new THREE.MeshBasicMaterial({visible:false,side:THREE.DoubleSide,fog:false})
+    );
+    hit.rotation.set(rx,ry,rz);
+    gizmoGroup.add(hit);
+    return hit; // raycasting は hit メッシュで行う
+  }
+  const ringY=makeRing(0x22cc44, Math.PI/2,0,0); // 水平リング: Y軸回転
+  const ringX=makeRing(0xee3333, 0,Math.PI/2,0); // YZ面リング: X軸回転
+  const ringZ=makeRing(0x3366ff, 0,0,0);          // XY面リング: Z軸回転
+
+  let rotDragAxis=null, rotDragAccum=0;
+  let rotDragPX=0, rotDragPY=0;
+  let rotDragTangentX=1, rotDragTangentY=0;
+  let rotDragPending=false;
+  const ROT_STEP_PX=55;
+
+  let gizmoEnabled=true;
+
+  function updateGizmo(mino){
+    if(!mino||!isMyTurn||gameFinished||!gizmoEnabled){gizmoGroup.visible=false;return;}
+    gizmoGroup.position.set(mino.pivotX+0.5,mino.pivotY+0.5,mino.pivotZ+0.5);
+    gizmoGroup.visible=true;
+  }
+
+  async function applyGizmoRotation(axis,dir){
+    if(!isMyTurn||!currentMinoCache||gameFinished||rotDragPending) return;
+    rotDragPending=true;
+    try{
+      const rotKey=axis==='Y'?(dir>0?'Ycw':'Yccw')
+                  :axis==='X'?(dir>0?'Xcw':'Xccw')
+                  :           (dir>0?'Zcw':'Zccw');
+      const upd=tryRotateWithKick(currentMinoCache,rotKey);
+      if(upd) await update(ref(db,`rooms/${roomId}/currentMino`),upd);
+    }finally{ rotDragPending=false; }
+  }
 
   let localBoard=null;
   let playersCache={};
@@ -934,8 +1097,7 @@ async function initGame(db, roomId, myId) {
 
   function syncMino(mino) {
     minoGroup.clear(); ghostGroup.clear();
-    updateRotPreviews(mino);
-    if(!mino) return;
+    if(!mino){ updateGizmo(null); try{updateRotPreviews(null);}catch(_){} return; }
 
     const blocks=getMinoBlocks(mino);
     const ci=playersCache[mino.owner]?.colorIndex??0;
@@ -961,6 +1123,43 @@ async function initGame(db, roomId, myId) {
       ghostGroup.add(mesh);
       ghostGroup.add(edge);
     });
+    const _gdrop=blocks.length>0?blocks[0][1]-ghostBlocks[0][1]:0;
+    updateGizmo({...mino,pivotY:mino.pivotY-_gdrop});
+    try{ updateRotPreviews(mino); }catch(_){}
+  }
+
+  // --- ライン完成グロー ---
+  function showLineGlow(lines, board){
+    glowGroup.clear();
+    for(const line of lines){
+      const coords=line.dir==='x'
+        ?[0,1,2,3,4,5,6].map(x=>[x,line.y,line.z])
+        :[0,1,2,3,4,5,6].map(z=>[line.x,line.y,z]);
+      for(const [x,y,z] of coords){
+        const colorVal=board[y]?.[z]?.[x]; if(!colorVal) continue;
+        const ci=colorVal-1;
+        const base=new THREE.Color(COLORS_INT[ci]);
+        // 明るいフラッシュ（ブロック面上）
+        const flashMat=new THREE.MeshBasicMaterial({
+          color:base.clone().offsetHSL(0,-0.1,0.38),
+          transparent:true,opacity:1,depthWrite:false,
+          polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2,
+        });
+        const flash=new THREE.Mesh(cubeGeo,flashMat);
+        flash.position.set(x+0.5,y+0.5,z+0.5);
+        flash.userData.baseOpacity=1.0;
+        glowGroup.add(flash);
+        // 外側ハロー（一回り大きいキューブ）
+        const haloMat=new THREE.MeshBasicMaterial({
+          color:base,transparent:true,opacity:0.45,depthWrite:false,
+        });
+        const halo=new THREE.Mesh(new THREE.BoxGeometry(1.38,1.38,1.38),haloMat);
+        halo.position.set(x+0.5,y+0.5,z+0.5);
+        halo.userData.baseOpacity=0.45;
+        glowGroup.add(halo);
+      }
+    }
+    glowStartTime=performance.now();
   }
 
   // --- 初期データ一括取得（リスナー登録前に全キャッシュを確定）---
@@ -982,6 +1181,14 @@ async function initGame(db, roomId, myId) {
     updateHoldHUD(holdMinoCache);
     if(isMyTurn){holdUsed=false;setControlsActive(true);}else setControlsActive(false);
     syncHoldPanel();
+    document.getElementById('gizmo-toggle').addEventListener('click',()=>{
+      gizmoEnabled=!gizmoEnabled;
+      const btn=document.getElementById('gizmo-toggle');
+      btn.textContent=gizmoEnabled?'⊙ ガイド円':'○ ガイド円';
+      btn.classList.toggle('off',!gizmoEnabled);
+      if(!gizmoEnabled){ gizmoGroup.visible=false; }
+      else { syncMino(currentMinoCache); }
+    });
     document.getElementById('btn-reload').addEventListener('click',()=>location.reload());
     document.getElementById('post-btn-reload').addEventListener('click',()=>location.reload());
     document.getElementById('post-btn-rematch').addEventListener('click',async()=>{
@@ -1003,8 +1210,11 @@ async function initGame(db, roomId, myId) {
 
   // --- Firebase リスナー ---
   onValue(ref(db,`rooms/${roomId}/board`), snap=>{
-    localBoard=snap.val();
+    const newBoard=snap.val();
+    const lines=detectNewLines(localBoard, newBoard);
+    localBoard=newBoard;
     syncBoard(localBoard);
+    if(lines.length>0){ showLineGlow(lines, localBoard); seLine(lines.length); }
     renderHudPlayers(playersCache,activeTurnCache);
   });
 
@@ -1032,12 +1242,7 @@ async function initGame(db, roomId, myId) {
   });
 
   onValue(ref(db,`rooms/${roomId}/winner`), snap=>{
-    if(snap.val()){
-      get(ref(db,`rooms/${roomId}`)).then(rSnap=>{
-        const d=rSnap.val()||{};
-        showGameOver(snap.val(), d.endReason||'full', d.winFace||null);
-      });
-    }
+    if(snap.val()) showGameOver(snap.val());
   });
 
   onValue(ref(db,`rooms/${roomId}/currentTurn`), snap=>{
@@ -1048,6 +1253,12 @@ async function initGame(db, roomId, myId) {
     if(isMyTurn){ holdUsed=false; setControlsActive(true); }
     else setControlsActive(false);
     syncHoldPanel();
+    if(currentMinoCache&&localBoard){
+      const _b=getMinoBlocks(currentMinoCache);
+      const _g=calcGhost(_b,localBoard);
+      const _d=_b.length>0?_b[0][1]-_g[0][1]:0;
+      updateGizmo({...currentMinoCache,pivotY:currentMinoCache.pivotY-_d});
+    }else{updateGizmo(currentMinoCache);}
   });
 
   // --- HUD 更新 ---
@@ -1072,10 +1283,10 @@ async function initGame(db, roomId, myId) {
   }
 
   function buildMiniPreview(type,colorHex){
-    if(!type||!MINO_PREVIEW[type]) return Array(6).fill('<div class="mini-cell"></div>').join('');
+    if(!type||!MINO_PREVIEW[type]) return Array(8).fill('<div class="mini-cell"></div>').join('');
     const cells=MINO_PREVIEW[type];
     let html='';
-    for(let r=0;r<2;r++) for(let c=0;c<3;c++){
+    for(let r=0;r<2;r++) for(let c=0;c<4;c++){
       const on=cells.some(([cc,rr])=>cc===c&&rr===r);
       html+=`<div class="mini-cell${on?' on':''}" style="${on?`background:${colorHex};box-shadow:0 0 3px ${colorHex}88`:''}"></div>`;
     }
@@ -1129,10 +1340,10 @@ async function initGame(db, roomId, myId) {
 
   // ミノ 2Dプレビュー描画
   function renderMinoPreview(el,type,colorHex){
-    if(!type||!MINO_PREVIEW[type]){el.innerHTML='<div class="preview-grid">'+Array(6).fill('<div class="preview-cell"></div>').join('')+'</div>';return;}
+    if(!type||!MINO_PREVIEW[type]){el.innerHTML='<div class="preview-grid">'+Array(8).fill('<div class="preview-cell"></div>').join('')+'</div>';return;}
     const cells=MINO_PREVIEW[type];
     let html='<div class="preview-grid">';
-    for(let r=0;r<2;r++) for(let c=0;c<3;c++){
+    for(let r=0;r<2;r++) for(let c=0;c<4;c++){
       const on=cells.some(([cc,rr])=>cc===c&&rr===r);
       html+=`<div class="preview-cell${on?' on':''}" style="${on?`background:${colorHex};box-shadow:0 0 5px ${colorHex}88`:''}"></div>`;
     }
@@ -1162,21 +1373,37 @@ async function initGame(db, roomId, myId) {
     return isValid(getMinoBlocks(m))?m:null;
   }
 
-  // 壁キック付き回転試行
-  // 元位置で回転不可なら周辺オフセットをずらして有効位置を探す
+  // SRS壁キック付き回転試行
   function tryRotateWithKick(mino,rotKey){
-    const rotated={...mino,mat:mulMat(ROT[rotKey],mino.mat)};
-    // Y軸回転(Q/E): XZ方向にキック
-    // X軸回転(R/F): X・Y方向にキック
-    const kicks=(rotKey==='Yccw'||rotKey==='Ycw')
-      ? [[0,0,0],[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],
-         [2,0,0],[-2,0,0],[0,0,2],[0,0,-2],
-         [1,0,1],[1,0,-1],[-1,0,1],[-1,0,-1]]
-      : [[0,0,0],[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],
-         [2,0,0],[-2,0,0],[0,2,0],[0,-1,0],
-         [1,1,0],[-1,1,0]];
+    const newMat=mulMat(ROT[rotKey],mino.mat);
+    if(rotKey==='Ycw'||rotKey==='Yccw'){
+      const isCW=rotKey==='Ycw';
+      const from=mino.rotY??0;
+      const to=isCW?(from+1)%4:(from+3)%4;
+      const kickTable=mino.type==='I'?SRS_Y_KICKS_I:SRS_Y_KICKS;
+      const kicks=mino.type==='O'?[[0,0]]:(kickTable[`${from}_${isCW?'CW':'CCW'}`]||[[0,0]]);
+      for(const [dx,dz] of kicks){
+        const m={...mino,mat:newMat,rotY:to,pivotX:mino.pivotX+dx,pivotZ:mino.pivotZ+dz};
+        if(isValid(getMinoBlocks(m))) return m;
+      }
+      return null;
+    }
+    // Z軸回転: YZ平面キック
+    if(rotKey==='Zcw'||rotKey==='Zccw'){
+      const kicks=[[0,0,0],[0,0,1],[0,0,-1],[0,1,0],[0,-1,0],
+                   [0,0,2],[0,0,-2],[0,2,0],[0,-2,0]];
+      for(const [dx,dy,dz] of kicks){
+        const m={...mino,mat:newMat,pivotX:mino.pivotX+dx,pivotY:mino.pivotY+dy,pivotZ:mino.pivotZ+dz};
+        if(isValid(getMinoBlocks(m))) return m;
+      }
+      return null;
+    }
+    // X軸回転(R/F): XY平面キック
+    const kicks=[[0,0,0],[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],
+                 [2,0,0],[-2,0,0],[0,2,0],[0,-2,0],
+                 [1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0]];
     for(const [dx,dy,dz] of kicks){
-      const m={...rotated,pivotX:mino.pivotX+dx,pivotY:mino.pivotY+dy,pivotZ:mino.pivotZ+dz};
+      const m={...mino,mat:newMat,pivotX:mino.pivotX+dx,pivotY:mino.pivotY+dy,pivotZ:mino.pivotZ+dz};
       if(isValid(getMinoBlocks(m))) return m;
     }
     return null;
@@ -1194,84 +1421,14 @@ async function initGame(db, roomId, myId) {
     if(!isMyTurn||!currentMinoCache||holdUsed) return;
     holdUsed=true;
     syncHoldPanel();
+    seHold();
     const cur=currentMinoCache;
     const heldType=holdMinoCache[myId]??null;
     const newType=heldType??nextMinoCache[myId]??randomMino();
-    const newMino={type:newType,pivotX:3,pivotY:22,pivotZ:3,mat:[...ID_MAT],owner:myId};
+    const newMino={type:newType,pivotX:3,pivotY:HEIGHT+2,pivotZ:3,mat:[...ID_MAT],rotY:0,owner:myId};
     const upd={currentMino:newMino,[`holdMino/${myId}`]:cur.type};
     if(!heldType) upd[`nextMino/${myId}`]=randomMino();
     await update(ref(db,`rooms/${roomId}`),upd);
-  }
-
-  // --- 勝利判定 ---
-  // 5面（top / front(-Z) / back(+Z) / left(-X) / right(+X)）を2Dに投影
-  function getProjection(board,face){
-    if(!board) return [];
-    if(face==='top'){
-      const p=Array.from({length:7},()=>Array(7).fill(0));
-      for(let z=0;z<7;z++) for(let x=0;x<7;x++)
-        for(let y=19;y>=0;y--){if(board[y]?.[z]?.[x]){p[z][x]=board[y][z][x];break;}}
-      return p;
-    }
-    if(face==='front'){
-      const p=Array.from({length:20},()=>Array(7).fill(0));
-      for(let y=0;y<20;y++) for(let x=0;x<7;x++)
-        for(let z=0;z<7;z++){if(board[y]?.[z]?.[x]){p[y][x]=board[y][z][x];break;}}
-      return p;
-    }
-    if(face==='back'){
-      const p=Array.from({length:20},()=>Array(7).fill(0));
-      for(let y=0;y<20;y++) for(let x=0;x<7;x++)
-        for(let z=6;z>=0;z--){if(board[y]?.[z]?.[x]){p[y][x]=board[y][z][x];break;}}
-      return p;
-    }
-    if(face==='left'){
-      const p=Array.from({length:20},()=>Array(7).fill(0));
-      for(let y=0;y<20;y++) for(let z=0;z<7;z++)
-        for(let x=0;x<7;x++){if(board[y]?.[z]?.[x]){p[y][z]=board[y][z][x];break;}}
-      return p;
-    }
-    if(face==='right'){
-      const p=Array.from({length:20},()=>Array(7).fill(0));
-      for(let y=0;y<20;y++) for(let z=0;z<7;z++)
-        for(let x=6;x>=0;x--){if(board[y]?.[z]?.[x]){p[y][z]=board[y][z][x];break;}}
-      return p;
-    }
-    return [];
-  }
-
-  // 投影グリッドで特定色の5連があるか判定
-  function hasColor5(proj,ci){
-    const rows=proj.length; if(!rows) return false;
-    const cols=proj[0].length;
-    const chk=(r,c,dr,dc)=>{
-      for(let i=0;i<7;i++){
-        const rr=r+dr*i,cc=c+dc*i;
-        if(rr<0||rr>=rows||cc<0||cc>=cols||proj[rr][cc]!==ci) return false;
-      }
-      return true;
-    };
-    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
-      if(proj[r][c]===ci)
-        if(chk(r,c,0,1)||chk(r,c,1,0)||chk(r,c,1,1)||chk(r,c,1,-1)) return true;
-    }
-    return false;
-  }
-
-  // 5面すべてチェック
-  function checkPlayerVictory(board,colorIndex){
-    const ci=colorIndex+1; // 1〜4
-    for(const face of ['top','front','back','left','right'])
-      if(hasColor5(getProjection(board,face),ci)) return true;
-    return false;
-  }
-
-  // 5連が成立している最初の面名を返す
-  function findWinningFace(board,colorIndex){
-    const ci=colorIndex+1;
-    for(const face of ['top','front','back','left','right'])
-      if(hasColor5(getProjection(board,face),ci)) return face;
-    return null;
   }
 
   // 新たに完成したラインを検出（横:X方向 / 奥行:Z方向）
@@ -1292,18 +1449,30 @@ async function initGame(db, roomId, myId) {
     return lines;
   }
 
-  // 完成ラインの色別マス数 → プレイヤーIDごとの加算ポイントを返す
-  function calcLineScores(lines, board, players){
+  // 完成ラインのスコア計算
+  // - 各プレイヤー: 自分のブロック数 × 1pt
+  // - 完成させた人(completerId): +1pt ボーナス（ライン1本ごと）
+  // - 7個全て自分色の場合: ブロック分を2倍（7×2+1=15pt）
+  function calcLineScores(lines, board, players, completerId){
     const additions={};
+    const completerColor=completerId?(players[completerId]?.colorIndex??-1)+1:-1;
     for(const line of lines){
       const cells=line.dir==='x'
-        ? [0,1,2,3,4,5,6].map(x=>board[line.y][line.z][x])
-        : [0,1,2,3,4,5,6].map(z=>board[line.y][z][line.x]);
+        ?[0,1,2,3,4,5,6].map(x=>board[line.y][line.z][x])
+        :[0,1,2,3,4,5,6].map(z=>board[line.y][z][line.x]);
+      const allOwned=completerColor>0&&cells.every(v=>v===completerColor);
       for(const colorVal of cells){
         if(!colorVal) continue;
         const pid=Object.entries(players).find(([,p])=>(p.colorIndex??0)===colorVal-1)?.[0];
-        if(pid) additions[pid]=(additions[pid]||0)+1;
+        if(!pid) continue;
+        const pts=(allOwned&&pid===completerId)?2:1;
+        additions[pid]=(additions[pid]||0)+pts;
       }
+    }
+    // 同時ライン数 n に応じた三角数ボーナス: 1+2+…+n = n*(n+1)/2
+    if(completerId && lines.length>0){
+      const n=lines.length;
+      additions[completerId]=(additions[completerId]||0)+n*(n+1)/2;
     }
     return additions;
   }
@@ -1324,7 +1493,8 @@ async function initGame(db, roomId, myId) {
   }
 
   // ゲーム終了表示
-  function showGameOver(winnerId, endReason, winFace){
+  function showGameOver(winnerId){
+    seGameOver();
     const medals=['🥇','🥈','🥉','🏅'];
     const rankings=Object.keys(playersCache).length ? computeRankings(playersCache) : [];
 
@@ -1385,7 +1555,7 @@ async function initGame(db, roomId, myId) {
 
     // ライン完成チェック → スコア加算
     const newLines=detectNewLines(localBoard, board);
-    const scoreAdd=newLines.length>0 ? calcLineScores(newLines, board, playersCache) : {};
+    const scoreAdd=newLines.length>0 ? calcLineScores(newLines, board, playersCache, myId) : {};
     const scoreUpdates=Object.fromEntries(
       Object.entries(scoreAdd).map(([pid,pts])=>[`players/${pid}/score`,(playersCache[pid]?.score||0)+pts])
     );
@@ -1412,7 +1582,7 @@ async function initGame(db, roomId, myId) {
       ...scoreUpdates,
       currentTurn: nextPid,
       turnIndex:   nextIdx,
-      currentMino: {type:nextType,pivotX:3,pivotY:HEIGHT+2,pivotZ:3,mat:[...ID_MAT],owner:nextPid},
+      currentMino: {type:nextType,pivotX:3,pivotY:HEIGHT+2,pivotZ:3,mat:[...ID_MAT],rotY:0,owner:nextPid},
       [`nextMino/${nextPid}`]: randomMino(),
     });
 
@@ -1426,19 +1596,25 @@ async function initGame(db, roomId, myId) {
     const isMine=isMyTurn||(currentMinoCache?.owner===myId);
     if(!isMine||!currentMinoCache||gameFinished) return;
     const m=currentMinoCache;
-    let upd=null;
+    let upd=null, _seType=null;
     switch(e.code){
-      case 'KeyW': {const d=getCamDirs().W; upd=tryMove(m,d[0],0,d[2]);} break;
-      case 'KeyS': {const d=getCamDirs().S; upd=tryMove(m,d[0],0,d[2]);} break;
-      case 'KeyA': {const d=getCamDirs().A; upd=tryMove(m,d[0],0,d[2]);} break;
-      case 'KeyD': {const d=getCamDirs().D; upd=tryMove(m,d[0],0,d[2]);} break;
-      case 'KeyQ': upd=tryRotateWithKick(m,'Yccw'); break; // Y軸回転（壁キックあり）
-      case 'KeyE': upd=tryRotateWithKick(m,'Ycw');  break;
-      case 'KeyR': upd=tryRotateWithKick(m,'Xccw'); break; // X軸回転（壁キックあり）
-      case 'KeyF': upd=tryRotateWithKick(m,'Xcw');  break;
+      case 'KeyW': {const d=getCamDirs().W; upd=tryMove(m,d[0],0,d[2]); _seType='move';} break;
+      case 'KeyS': {const d=getCamDirs().S; upd=tryMove(m,d[0],0,d[2]); _seType='move';} break;
+      case 'KeyA': {const d=getCamDirs().A; upd=tryMove(m,d[0],0,d[2]); _seType='move';} break;
+      case 'KeyD': {const d=getCamDirs().D; upd=tryMove(m,d[0],0,d[2]); _seType='move';} break;
+      case 'KeyQ': upd=tryRotateWithKick(m,'Yccw'); _seType='rotate'; break; // Y軸回転（壁キックあり）
+      case 'KeyE': upd=tryRotateWithKick(m,'Ycw');  _seType='rotate'; break;
+      case 'KeyR': upd=tryRotateWithKick(m,'Xccw'); _seType='rotate'; break; // X軸回転（壁キックあり）
+      case 'KeyF': upd=tryRotateWithKick(m,'Xcw');  _seType='rotate'; break;
+      case 'ArrowDown':
+        e.preventDefault();
+        upd=doHardDrop(m);
+        seSoftDrop();
+        break;
       case 'Space':
         e.preventDefault();
         upd=doHardDrop(m);
+        seHardDrop();
         if(upd) await update(ref(db,`rooms/${roomId}/currentMino`),upd);
         await lockAndAdvanceTurn();
         return;
@@ -1450,6 +1626,8 @@ async function initGame(db, roomId, myId) {
     }
     if(upd){
       e.preventDefault();
+      if(_seType==='move') seMove();
+      else if(_seType==='rotate') seRotate();
       await update(ref(db,`rooms/${roomId}/currentMino`),upd);
     }
   });
@@ -1458,12 +1636,55 @@ async function initGame(db, roomId, myId) {
   let dragMode=null, px=0, py=0;
 
   canvas.addEventListener('mousedown',e=>{
+    // ギズモリングへのヒット判定（左クリックのみ）
+    if(e.button===0 && gizmoGroup.visible){
+      const ndc=new THREE.Vector2((e.clientX/W)*2-1,-(e.clientY/H)*2+1);
+      const ray=new THREE.Raycaster();
+      ray.setFromCamera(ndc,camera);
+      gizmoGroup.updateWorldMatrix(true,true);
+      const hits=ray.intersectObjects([ringY,ringX,ringZ]);
+      if(hits.length>0){
+        const ring=hits[0].object;
+        rotDragAxis=ring===ringY?'Y':ring===ringX?'X':'Z';
+        rotDragAccum=0;
+        rotDragPX=e.clientX; rotDragPY=e.clientY;
+        // ヒット点のタンジェント方向をスクリーン空間に投影
+        const center=gizmoGroup.position.clone();
+        const axisVec=rotDragAxis==='Y'?new THREE.Vector3(0,1,0)
+                     :rotDragAxis==='X'?new THREE.Vector3(1,0,0)
+                     :new THREE.Vector3(0,0,1);
+        const radial=hits[0].point.clone().sub(center).normalize();
+        const tangent=new THREE.Vector3().crossVectors(axisVec,radial).normalize();
+        const cProj=center.clone().project(camera);
+        const tProj=center.clone().add(tangent).project(camera);
+        const tx=(tProj.x-cProj.x)*(W/2);
+        const ty=-(tProj.y-cProj.y)*(H/2);
+        const tLen=Math.sqrt(tx*tx+ty*ty);
+        rotDragTangentX=tLen>0.001?tx/tLen:1;
+        rotDragTangentY=tLen>0.001?ty/tLen:0;
+        e.preventDefault();
+        return; // カメラ操作を抑制
+      }
+    }
     dragMode=e.button===2?'pan':'orbit';
     px=e.clientX; py=e.clientY; e.preventDefault();
   });
   canvas.addEventListener('contextmenu',e=>e.preventDefault());
-  window.addEventListener('mouseup',()=>dragMode=null);
+  window.addEventListener('mouseup',()=>{
+    dragMode=null;
+    rotDragAxis=null;
+    rotDragAccum=0;
+  });
   window.addEventListener('mousemove',e=>{
+    if(rotDragAxis){
+      const dx=e.clientX-rotDragPX, dy=e.clientY-rotDragPY;
+      const along=dx*rotDragTangentX+dy*rotDragTangentY;
+      rotDragAccum+=along;
+      rotDragPX=e.clientX; rotDragPY=e.clientY;
+      while(rotDragAccum>=ROT_STEP_PX){ rotDragAccum-=ROT_STEP_PX; applyGizmoRotation(rotDragAxis,1); }
+      while(rotDragAccum<=-ROT_STEP_PX){ rotDragAccum+=ROT_STEP_PX; applyGizmoRotation(rotDragAxis,-1); }
+      return; // カメラ操作を抑制
+    }
     if(!dragMode) return;
     const dx=e.clientX-px, dy=e.clientY-py;
     if(dragMode==='orbit'){
@@ -1496,8 +1717,20 @@ async function initGame(db, roomId, myId) {
   // (Phase 5以降向けに内部参照は関数スコープ内で完結)
 
   // --- レンダーループ ---
-  (function animate(){
+  (function animate(t){
     requestAnimationFrame(animate);
+    if(glowStartTime!==null){
+      const elapsed=(t??performance.now())-glowStartTime;
+      const p=Math.min(elapsed/GLOW_DURATION,1);
+      // 最初8%で素早くフラッシュイン → 残り92%でパルスしながらフェードアウト
+      const alpha=p<0.08
+        ?p/0.08
+        :(1-(p-0.08)/0.92)*(0.65+0.35*Math.sin((p-0.08)/0.92*Math.PI*4));
+      glowGroup.children.forEach(m=>{
+        if(m.material) m.material.opacity=m.userData.baseOpacity*alpha;
+      });
+      if(p>=1){glowGroup.clear();glowStartTime=null;}
+    }
     renderer.render(scene,camera);
   })();
 }
@@ -1526,6 +1759,8 @@ function esc(str){
 <div id="bgm-vol-ctrl">
   <span id="bgm-vol-icon">♪</span>
   <input type="range" id="bgm-vol-slider" min="0" max="100" value="50">
+  <span style="color:#7eb3ff;font-size:0.8rem;margin-left:2px;user-select:none;line-height:1">SE</span>
+  <input type="range" id="se-vol-slider" min="0" max="100" value="60">
 </div>
 
 <style>
@@ -1548,48 +1783,12 @@ function esc(str){
   user-select: none;
   line-height: 1;
 }
-#bgm-vol-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 90px; height: 4px;
-  background: #0f3460;
-  border-radius: 4px;
-  outline: none;
+#bgm-vol-slider, #se-vol-slider {
+  width: 80px;
   margin: 0; padding: 0;
-  border: none;
+  border: none; outline: none;
   cursor: pointer;
-}
-#bgm-vol-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px; height: 14px;
-  border-radius: 50%;
-  background: #e94560;
-  cursor: pointer;
-  border: 2px solid #fff;
-  box-shadow: 0 0 4px rgba(233,69,96,0.6);
-}
-#bgm-vol-slider::-moz-range-thumb {
-  width: 14px; height: 14px;
-  border-radius: 50%;
-  background: #e94560;
-  cursor: pointer;
-  border: 2px solid #fff;
-  box-shadow: 0 0 4px rgba(233,69,96,0.6);
-}
-#bgm-vol-slider::-webkit-slider-runnable-track {
-  height: 4px;
-  border-radius: 4px;
-  background: linear-gradient(to right, #7eb3ff var(--vol-pct,50%), #0f3460 var(--vol-pct,50%));
-}
-#bgm-vol-slider::-moz-range-track {
-  height: 4px;
-  border-radius: 4px;
-  background: #0f3460;
-}
-#bgm-vol-slider::-moz-range-progress {
-  background: #7eb3ff;
-  border-radius: 4px;
+  accent-color: #7eb3ff;
 }
 </style>
 
@@ -1600,7 +1799,8 @@ function esc(str){
 <script>
 // ===== BGM 管理 =====
 const bgm = document.getElementById('bgm');
-bgm.volume = 0.5;
+const _savedVol = parseFloat(localStorage.getItem('tn_volume'));
+bgm.volume = isNaN(_savedVol) ? 0.5 : _savedVol;
 
 let bgmUnlocked = false;
 
@@ -1610,6 +1810,7 @@ function bgmPlay() {
 
 // ボリュームスライダー
 const _volSlider = document.getElementById('bgm-vol-slider');
+_volSlider.value = Math.round(bgm.volume * 100);
 function _updateVolTrack() {
   const pct = _volSlider.value + '%';
   _volSlider.style.setProperty('--vol-pct', pct);
@@ -1617,9 +1818,28 @@ function _updateVolTrack() {
 }
 _volSlider.addEventListener('input', () => {
   bgm.volume = _volSlider.value / 100;
+  localStorage.setItem('tn_volume', bgm.volume);
   _updateVolTrack();
 });
 _updateVolTrack();
+
+// SE ボリュームスライダー
+{
+  const _seSlider = document.getElementById('se-vol-slider');
+  const _initSE = parseFloat(localStorage.getItem('tn_se_volume'));
+  _seSlider.value = Math.round((isNaN(_initSE) ? 0.6 : _initSE) * 100);
+  function _updateSETrack() {
+    const pct = _seSlider.value + '%';
+    _seSlider.style.background = `linear-gradient(to right,#7eb3ff ${pct},#0f3460 ${pct})`;
+  }
+  _seSlider.addEventListener('input', () => {
+    const v = _seSlider.value / 100;
+    localStorage.setItem('tn_se_volume', v);
+    window.seSetVol?.(v);
+    _updateSETrack();
+  });
+  _updateSETrack();
+}
 
 // ブラウザの自動再生制限を回避：最初のユーザー操作で再生開始
 function unlockBgm() {
