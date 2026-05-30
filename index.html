@@ -265,6 +265,159 @@
     .ranking-name { flex: 1; font-size: 0.95rem; font-weight: bold; text-align: left; }
     .ranking-score { font-size: 0.8rem; color: #7eb3ff; white-space: nowrap; }
     .ranking-score b { font-size: 1.05rem; }
+
+    /* ===== ルールボタン（ロビー・待機室） ===== */
+    .btn-rules {
+      background: transparent; border: 1px solid #2a4070;
+      border-radius: 20px; color: #7eb3ff;
+      font-size: 0.82rem; padding: 6px 20px;
+      cursor: pointer; width: auto;
+      transition: border-color 0.15s, color 0.15s; letter-spacing: 0.5px;
+    }
+    .btn-rules:hover { border-color: #4a80c0; color: #acd4ff; transform: none; }
+
+    /* ===== ルールボタン（ゲーム中） ===== */
+    #rules-btn-ingame {
+      position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+      pointer-events: auto;
+      background: rgba(10,18,40,0.88); border: 1px solid #2a4070;
+      border-radius: 20px; color: #7eb3ff;
+      font-size: 0.76rem; padding: 5px 16px;
+      cursor: pointer; width: auto;
+      backdrop-filter: blur(4px); white-space: nowrap;
+      transition: border-color 0.15s;
+    }
+    #rules-btn-ingame:hover { border-color: #4a80c0; transform: translateX(-50%); }
+
+    /* ===== ルールポップアップ ===== */
+    #rules-overlay {
+      display: none; position: fixed; inset: 0; z-index: 99999;
+      background: rgba(0,0,0,0.78);
+      align-items: center; justify-content: center;
+      backdrop-filter: blur(6px);
+      padding: 16px;
+    }
+    #rules-overlay.open { display: flex; }
+    #rules-modal {
+      background: #0d1b38; border: 1px solid #2a4070;
+      border-radius: 16px; width: 100%; max-width: 600px;
+      max-height: 85vh; display: flex; flex-direction: column;
+      animation: fadeIn 0.25s ease;
+    }
+    #rules-modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 24px 14px; border-bottom: 1px solid #1e2d45; flex-shrink: 0;
+    }
+    #rules-modal-header h2 { font-size: 1rem; color: #e94560; letter-spacing: 2px; margin: 0; }
+    #rules-modal-close {
+      background: transparent; border: none; color: #556;
+      font-size: 1.3rem; cursor: pointer; padding: 0 4px;
+      width: auto; line-height: 1; transition: color 0.15s;
+    }
+    #rules-modal-close:hover { color: #e94560; transform: none; opacity: 1; }
+    #rules-modal-body {
+      overflow-y: auto; padding: 20px 24px 28px;
+      font-size: 0.84rem; line-height: 1.75; color: #cde;
+    }
+    .r-section { margin-bottom: 22px; }
+    .r-section h3 {
+      font-size: 0.75rem; color: #7eb3ff; text-transform: uppercase;
+      letter-spacing: 1.5px; margin-bottom: 10px; padding-bottom: 5px;
+      border-bottom: 1px solid #1e2d45;
+    }
+    .r-section p { margin-bottom: 6px; }
+    .r-table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 0.82rem; }
+    .r-table th { color: #445; font-weight: normal; font-size: 0.72rem; padding: 5px 8px; text-align: left; border-bottom: 1px solid #1a2840; }
+    .r-table td { padding: 5px 8px; border-bottom: 1px solid #131f35; }
+    .r-table td:first-child { color: #7eb3ff; white-space: nowrap; font-family: monospace; }
+    .r-accent { color: #e94560; font-weight: bold; }
+    .r-note { color: #556; font-size: 0.78rem; margin-top: 6px; }
+
+    /* ===== ルール内ビジュアル ===== */
+    .mino-showcase {
+      display: flex; flex-wrap: wrap; gap: 14px;
+      margin: 12px 0 4px; justify-content: center;
+    }
+    .mino-item { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+    .mino-item-label {
+      font-size: 0.68rem; color: #7eb3ff; font-family: monospace;
+      font-weight: bold; letter-spacing: 1px;
+    }
+    .mino-shape {
+      display: grid;
+      grid-template-columns: repeat(4, 12px);
+      grid-template-rows: repeat(2, 12px);
+      gap: 2px;
+    }
+    .ms { border-radius: 2px; background: rgba(255,255,255,0.06); }
+    .ms.on { background: #7eb3ff; box-shadow: 0 0 5px #7eb3ff99; }
+
+    /* ライン完成デモ */
+    .line-demo-wrap {
+      margin: 12px 0; display: flex; flex-direction: column; gap: 10px;
+    }
+    .line-demo {
+      display: flex; align-items: center; gap: 12px;
+      justify-content: center; flex-wrap: wrap;
+    }
+    .line-board { display: flex; flex-direction: column; gap: 2px; }
+    .line-row { display: flex; gap: 2px; }
+    .lc {
+      width: 16px; height: 16px; border-radius: 2px;
+      background: rgba(255,255,255,0.06); flex-shrink: 0;
+    }
+    .lc.r { background: #c0392b; }
+    .lc.b { background: #2980b9; }
+    .lc.g { background: #27ae60; }
+    .lc.y { background: #d4ac0d; }
+    .lc.flash {
+      background: #f5e642;
+      box-shadow: 0 0 8px #f5e64288, 0 0 4px #fff4;
+      animation: lcPulse 1s ease-in-out infinite;
+    }
+    @keyframes lcPulse {
+      0%,100% { opacity: 1; box-shadow: 0 0 8px #f5e64288, 0 0 4px #fff4; }
+      50%      { opacity: 0.65; box-shadow: 0 0 14px #f5e642cc, 0 0 6px #fff6; }
+    }
+    .line-arrow { font-size: 1.5rem; color: #7eb3ff; line-height: 1; flex-shrink: 0; }
+    .line-caption {
+      font-size: 0.7rem; color: #556; text-align: center; margin-top: 5px; line-height: 1.4;
+    }
+    .line-caption.ok { color: #f5e642; font-weight: bold; }
+    .lc.glow { animation: lcGlow 1.1s ease-in-out infinite; }
+    @keyframes lcGlow {
+      0%,100% { filter: brightness(1); }
+      50%      { filter: brightness(2.2); }
+    }
+    .score-eg {
+      background: rgba(255,255,255,0.03); border: 1px solid #1e3a6e;
+      border-radius: 8px; padding: 10px 14px; margin-bottom: 8px;
+    }
+    .score-eg-label { font-size: 0.7rem; color: #445; margin-bottom: 7px; letter-spacing: 0.5px; }
+    .score-eg-row { display: flex; gap: 3px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+    .score-eg-result { font-size: 0.83rem; line-height: 2; }
+
+    /* ライン方向図 */
+    .line-dir-wrap {
+      display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin: 10px 0 4px;
+    }
+    .line-dir-item { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .line-dir-label { font-size: 0.7rem; color: #7eb3ff; letter-spacing: 0.5px; text-align: center; }
+    .line-dir-board {
+      display: flex; flex-direction: column; gap: 2px;
+      border: 1px solid #1e3a6e; padding: 3px; border-radius: 3px;
+    }
+
+    /* ステップリスト */
+    .r-steps { list-style: none; margin: 6px 0; display: flex; flex-direction: column; gap: 4px; }
+    .r-steps li { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid #131f35; align-items: flex-start; }
+    .r-steps li:last-child { border-bottom: none; }
+    .r-step-num {
+      flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+      background: #1a3a6a; color: #7eb3ff; font-size: 0.7rem; font-weight: bold;
+      display: flex; align-items: center; justify-content: center; margin-top: 1px;
+    }
+    .r-steps .r-step-body { font-size: 0.84rem; line-height: 1.55; }
   </style>
 </head>
 <body>
@@ -288,6 +441,9 @@
       style="text-transform:uppercase;letter-spacing:4px;font-family:monospace;font-size:1.2rem;">
     <p class="error-msg" id="join-error"></p>
     <button class="btn-secondary" id="btn-join" onclick="joinRoom()">参加する</button>
+  </div>
+  <div style="text-align:center;margin-top:10px">
+    <button class="btn-rules" onclick="openRules()">📖 ルール説明</button>
   </div>
 </div>
 
@@ -323,6 +479,9 @@
   <p id="height-display">盤面の高さ: <b id="height-display-val">—</b></p>
 
   <button class="btn-success" id="btn-start" onclick="startGame()" disabled>ゲームを開始する</button>
+  <div style="text-align:center;margin-top:10px">
+    <button class="btn-rules" onclick="openRules()">📖 ルール説明</button>
+  </div>
 </div>
 
 <!-- ===== ゲーム画面 ===== -->
@@ -371,6 +530,8 @@
         <span class="cam-label">視点リセット</span>
       </div>
     </div>
+
+    <button id="rules-btn-ingame" onclick="openRules()">📖 ルール</button>
 
     <div id="gameover-overlay">
       <div class="gameover-box">
@@ -427,7 +588,7 @@
       </div>
       <div class="ctrl-row">
         <div class="ctrl-keys"><kbd>↓</kbd></div>
-        <span class="ctrl-label">ソフトドロップ</span>
+        <span class="ctrl-label">瞬間落下（確定なし）</span>
       </div>
       <div class="ctrl-row">
         <div class="ctrl-keys"><kbd>Space</kbd></div>
@@ -1753,7 +1914,218 @@ function setLobbyDisabled(d){
 function esc(str){
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+window.openRules  = () => document.getElementById('rules-overlay').classList.add('open');
+window.closeRules = () => document.getElementById('rules-overlay').classList.remove('open');
 </script>
+
+<!-- ===== ルールポップアップ ===== -->
+<div id="rules-overlay" onclick="if(event.target===this)closeRules()">
+  <div id="rules-modal">
+    <div id="rules-modal-header">
+      <h2>📖 テトリスライン ルール</h2>
+      <button id="rules-modal-close" onclick="closeRules()">✕</button>
+    </div>
+    <div id="rules-modal-body">
+
+      <!-- ゲーム概要 -->
+      <div class="r-section">
+        <h3>ゲーム概要</h3>
+        <p>2〜4人で遊ぶオンライン <span class="r-accent">3D ターン制</span> パズル。全員が同じ <span class="r-accent">7×7×高さ</span> の立体盤面を共有し、順番に1つずつミノを積み上げます。<span class="r-accent">横列 or 奥行き列が7マス全て埋まる</span>とライン完成でポイント獲得。ゲーム終了時にスコアが最も高いプレイヤーの勝ちです。</p>
+      </div>
+
+      <!-- 盤面とミノ -->
+      <div class="r-section">
+        <h3>盤面とミノ</h3>
+        <p>盤面サイズは <span class="r-accent">横7 × 奥7 × 高さ（10 / 15 / 20）</span>。高さはホストが試合前に選択します。ミノは7種類。各プレイヤーに固有の色（赤・青・緑・黄）が割り当てられます。</p>
+        <div class="mino-showcase">
+          <!-- O -->
+          <div class="mino-item">
+            <div class="mino-shape">
+              <div class="ms on"></div><div class="ms on"></div><div class="ms"></div><div class="ms"></div>
+              <div class="ms on"></div><div class="ms on"></div><div class="ms"></div><div class="ms"></div>
+            </div>
+            <div class="mino-item-label">O</div>
+          </div>
+          <!-- T -->
+          <div class="mino-item">
+            <div class="mino-shape">
+              <div class="ms on"></div><div class="ms on"></div><div class="ms on"></div><div class="ms"></div>
+              <div class="ms"></div><div class="ms on"></div><div class="ms"></div><div class="ms"></div>
+            </div>
+            <div class="mino-item-label">T</div>
+          </div>
+          <!-- S -->
+          <div class="mino-item">
+            <div class="mino-shape">
+              <div class="ms"></div><div class="ms on"></div><div class="ms on"></div><div class="ms"></div>
+              <div class="ms on"></div><div class="ms on"></div><div class="ms"></div><div class="ms"></div>
+            </div>
+            <div class="mino-item-label">S</div>
+          </div>
+          <!-- Z -->
+          <div class="mino-item">
+            <div class="mino-shape">
+              <div class="ms on"></div><div class="ms on"></div><div class="ms"></div><div class="ms"></div>
+              <div class="ms"></div><div class="ms on"></div><div class="ms on"></div><div class="ms"></div>
+            </div>
+            <div class="mino-item-label">Z</div>
+          </div>
+          <!-- J -->
+          <div class="mino-item">
+            <div class="mino-shape">
+              <div class="ms on"></div><div class="ms"></div><div class="ms"></div><div class="ms"></div>
+              <div class="ms on"></div><div class="ms on"></div><div class="ms on"></div><div class="ms"></div>
+            </div>
+            <div class="mino-item-label">J</div>
+          </div>
+          <!-- L -->
+          <div class="mino-item">
+            <div class="mino-shape">
+              <div class="ms"></div><div class="ms"></div><div class="ms on"></div><div class="ms"></div>
+              <div class="ms on"></div><div class="ms on"></div><div class="ms on"></div><div class="ms"></div>
+            </div>
+            <div class="mino-item-label">L</div>
+          </div>
+          <!-- I -->
+          <div class="mino-item">
+            <div class="mino-shape">
+              <div class="ms on"></div><div class="ms on"></div><div class="ms on"></div><div class="ms on"></div>
+              <div class="ms"></div><div class="ms"></div><div class="ms"></div><div class="ms"></div>
+            </div>
+            <div class="mino-item-label">I</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1ターンの流れ -->
+      <div class="r-section">
+        <h3>1ターンの流れ</h3>
+        <ul class="r-steps">
+          <li>
+            <div class="r-step-num">1</div>
+            <div class="r-step-body">上部バナーに自分の名前が<span class="r-accent">点滅</span>したら操作開始。</div>
+          </li>
+          <li>
+            <div class="r-step-num">2</div>
+            <div class="r-step-body"><kbd>WASD</kbd> でミノを水平移動、<kbd>Q</kbd><kbd>E</kbd><kbd>R</kbd><kbd>F</kbd> で回転して位置を決める。<br>
+            <span style="color:#556;font-size:0.8rem">半透明のゴーストが落下先を示します。</span></div>
+          </li>
+          <li>
+            <div class="r-step-num">3</div>
+            <div class="r-step-body"><kbd>↓</kbd> キーで最下部へ瞬間移動（まだ確定しない）。最終位置を確認。</div>
+          </li>
+          <li>
+            <div class="r-step-num">4</div>
+            <div class="r-step-body"><kbd>Space</kbd> キーで<span class="r-accent">落として確定 → ターン終了</span>。ライン完成があれば得点が入る。</div>
+          </li>
+        </ul>
+        <p class="r-note">※ <kbd>Shift</kbd> でホールド（ミノを保留して入れ替え）。1ターンに1回のみ使えます。</p>
+      </div>
+
+      <!-- 操作キー -->
+      <div class="r-section">
+        <h3>操作キー</h3>
+        <table class="r-table">
+          <tr><th>キー</th><th>動作</th></tr>
+          <tr><td>W / A / S / D</td><td>ミノを水平移動（カメラの向きに対応）</td></tr>
+          <tr><td>Q / E</td><td>Y軸回転（真上から見て 左 / 右）</td></tr>
+          <tr><td>R / F</td><td>X軸回転（縦に倒す 前 / 後）</td></tr>
+          <tr><td>↓</td><td>最下部へ瞬間落下（確定しない）</td></tr>
+          <tr><td>Space</td><td>最下部へ落として<strong>確定</strong>・ターン終了</td></tr>
+          <tr><td>Shift</td><td>ホールド（1ターンに1回まで）</td></tr>
+        </table>
+      </div>
+
+      <!-- スコアの計算 -->
+      <div class="r-section">
+        <h3>スコアの計算</h3>
+        <p>ミノを確定して横列または奥行き列が7マス埋まると<span class="r-accent">ライン完成</span>。完成した列が光り、<strong>自分の色のブロック1マスにつき +1pt</strong> が全プレイヤーに入ります。</p>
+
+        <!-- 例1: 混合 -->
+        <div class="score-eg">
+          <div class="score-eg-label">例① 混合ライン</div>
+          <div class="score-eg-row">
+            <div class="lc r glow"></div><div class="lc r glow"></div><div class="lc b glow"></div>
+            <div class="lc r glow"></div><div class="lc b glow"></div><div class="lc b glow"></div><div class="lc r glow"></div>
+          </div>
+          <div class="score-eg-result">
+            <span style="color:#e74c3c">●</span> 赤: 4マス → <span style="color:#e74c3c;font-weight:bold">+4 pt</span><br>
+            <span style="color:#3498db">●</span> 青: 3マス → <span style="color:#3498db;font-weight:bold">+3 pt</span>
+          </div>
+        </div>
+
+        <!-- 例2: 4人混合 -->
+        <div class="score-eg">
+          <div class="score-eg-label">例② 4人混合ライン</div>
+          <div class="score-eg-row">
+            <div class="lc r glow"></div><div class="lc b glow"></div><div class="lc g glow"></div>
+            <div class="lc r glow"></div><div class="lc y glow"></div><div class="lc g glow"></div><div class="lc b glow"></div>
+          </div>
+          <div class="score-eg-result">
+            <span style="color:#e74c3c">●</span> 赤: 2マス → <span style="color:#e74c3c;font-weight:bold">+2 pt</span>
+            <span style="color:#3498db">●</span> 青: 2マス → <span style="color:#3498db;font-weight:bold">+2 pt</span><br>
+            <span style="color:#27ae60">●</span> 緑: 2マス → <span style="color:#27ae60;font-weight:bold">+2 pt</span>
+            <span style="color:#d4ac0d">●</span> 黄: 1マス → <span style="color:#d4ac0d;font-weight:bold">+1 pt</span>
+          </div>
+        </div>
+
+        <!-- 例3: 全部同じ色 ×2pt -->
+        <div class="score-eg">
+          <div class="score-eg-label">例③ 全マス自分の色 → ×2pt ボーナス</div>
+          <div class="score-eg-row">
+            <div class="lc r glow"></div><div class="lc r glow"></div><div class="lc r glow"></div>
+            <div class="lc r glow"></div><div class="lc r glow"></div><div class="lc r glow"></div><div class="lc r glow"></div>
+            <span style="font-size:0.8rem;color:#e74c3c;margin-left:6px;font-weight:bold">全て赤！</span>
+          </div>
+          <div class="score-eg-result">
+            <span style="color:#e74c3c">●</span> 赤: 7マス × 2pt = <span style="color:#e74c3c;font-weight:bold">+14 pt</span>
+          </div>
+        </div>
+
+        <!-- 同時完成ボーナス -->
+        <p style="margin-top:10px"><strong>同時完成ボーナス（完成させたプレイヤーのみ）：</strong>1ターンに複数ライン同時完成でボーナス加算。</p>
+        <table class="r-table">
+          <tr><th>同時完成</th><th>ボーナス</th></tr>
+          <tr><td>1本</td><td>+1 pt</td></tr>
+          <tr><td>2本</td><td>+3 pt</td></tr>
+          <tr><td>3本</td><td>+6 pt</td></tr>
+          <tr><td>4本</td><td>+10 pt</td></tr>
+        </table>
+        <p class="r-note">※ ボーナスは完成させた本人のみ。基本点は全員に入ります。</p>
+      </div>
+
+      <!-- カメラ操作 -->
+      <div class="r-section">
+        <h3>カメラ操作</h3>
+        <table class="r-table">
+          <tr><th>操作</th><th>動作</th></tr>
+          <tr><td>左ドラッグ</td><td>視点を回転</td></tr>
+          <tr><td>右ドラッグ</td><td>カメラの高さを調整</td></tr>
+          <tr><td>スクロール</td><td>ズームイン / アウト</td></tr>
+          <tr><td>Ctrl</td><td>視点を正面にリセット</td></tr>
+        </table>
+        <p class="r-note">※ WASD の移動方向はカメラの向きに連動します。視点を変えてから操作すると狙った場所に置きやすくなります。</p>
+      </div>
+
+      <!-- ゴーストとガイド円 -->
+      <div class="r-section">
+        <h3>ゴーストとガイド円</h3>
+        <p>操作中のミノの下に<span class="r-accent">半透明の影（ゴースト）</span>が表示されます。Space を押すとゴーストの位置に確定されます。</p>
+        <p>自分のターン中、ミノの周囲に<span class="r-accent">3色の輪（ガイド円）</span>が表示されます。輪をドラッグすると対応する軸に回転できます。<br>
+        <span style="color:#22cc44">●</span> 緑 = Y軸（水平回転）　<span style="color:#ee3333">●</span> 赤 = X軸　<span style="color:#3366ff">●</span> 青 = Z軸<br>
+        右下の「ガイド円」ボタンで表示を切り替えられます。</p>
+      </div>
+
+      <!-- ゲーム終了 -->
+      <div class="r-section">
+        <h3>ゲーム終了</h3>
+        <p>誰かが置いたブロックが<span class="r-accent">天井ライン（赤いライン）を超えた時点</span>でゲーム終了。その時点のスコアで順位が決まります。</p>
+        <p class="r-note">※ 天井を超えたブロックも得点計算には含まれます。</p>
+      </div>
+
+    </div>
+  </div>
+</div>
 
 <!-- ===== BGM ボリュームコントロール (全画面共通・常時表示) ===== -->
 <div id="bgm-vol-ctrl">
