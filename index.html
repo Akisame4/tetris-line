@@ -466,6 +466,24 @@
       0%,100% { border-color: #7eb3ff55; }
       50%      { border-color: #7eb3ff; }
     }
+    .kb-keys-group { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: flex-end; max-width: 200px; }
+    .kb-key-chip { display: flex; align-items: stretch; }
+    .kb-key-chip .kb-key-btn { border-radius: 4px 0 0 4px; min-width: 52px; }
+    .kb-key-chip .kb-key-btn:only-child { border-radius: 4px; }
+    .kb-key-del {
+      background: #1a2840; border: 1px solid #2a4070; border-left: none;
+      border-radius: 0 4px 4px 0; color: #445; cursor: pointer;
+      font-size: 0.72rem; padding: 0 6px; line-height: 1;
+      transition: color 0.1s, background 0.1s; width: auto;
+    }
+    .kb-key-del:hover { color: #e94560; background: #2a1020; border-color: #5a2030; }
+    .kb-add-btn {
+      background: transparent; border: 1px dashed #2a4070;
+      border-radius: 6px; color: #334; cursor: pointer;
+      font-size: 1rem; padding: 2px 8px; line-height: 1;
+      transition: color 0.1s, border-color 0.1s; width: auto;
+    }
+    .kb-add-btn:hover { color: #7eb3ff; border-color: #4a80c0; }
     #keybind-btn-ingame {
       position: absolute; bottom: 16px; left: calc(50% + 64px); transform: translateX(-50%);
       pointer-events: auto;
@@ -723,27 +741,39 @@ const seGameOver = () => [440,415,392,370,349].forEach((f,i) => setTimeout(() =>
 // ============================================================
 //  キーバインド設定
 // ============================================================
+// キーバインド設定（各アクションに最大3キーの配列）
 const DEFAULT_KB = {
-  moveForward: 'KeyW',
-  moveBack:    'KeyS',
-  moveLeft:    'KeyA',
-  moveRight:   'KeyD',
-  rotYccw:     'KeyQ',
-  rotYcw:      'KeyE',
-  rotXccw:     'KeyR',
-  rotXcw:      'KeyF',
-  softDrop:    'ArrowDown',
-  hardDrop:    'Space',
-  hold:        'ShiftLeft',
-  camReset:    'ControlLeft',
+  moveForward: ['KeyW'],
+  moveBack:    ['KeyS'],
+  moveLeft:    ['KeyA'],
+  moveRight:   ['KeyD'],
+  rotYccw:     ['KeyQ'],
+  rotYcw:      ['KeyE'],
+  rotXccw:     ['KeyR'],
+  rotXcw:      ['KeyF'],
+  softDrop:    ['ArrowDown'],
+  hardDrop:    ['Space'],
+  hold:        ['ShiftLeft'],
+  camReset:    ['ControlLeft'],
 };
 const KB_STORAGE = 'tn_keybindings';
+
 function loadKB() {
-  try { const s=JSON.parse(localStorage.getItem(KB_STORAGE)); return s?{...DEFAULT_KB,...s}:{...DEFAULT_KB}; }
-  catch { return {...DEFAULT_KB}; }
+  try {
+    const s=JSON.parse(localStorage.getItem(KB_STORAGE));
+    if(!s) return structuredClone(DEFAULT_KB);
+    const kb=structuredClone(DEFAULT_KB);
+    for(const [k,v] of Object.entries(s)){
+      if(k in kb) kb[k]=Array.isArray(v)?v:[v]; // 旧string形式も受け入れ
+    }
+    return kb;
+  } catch { return structuredClone(DEFAULT_KB); }
 }
-function saveKB(kb) { localStorage.setItem(KB_STORAGE, JSON.stringify(kb)); }
-function codeToLabel(code) {
+function saveKB(kb){ localStorage.setItem(KB_STORAGE,JSON.stringify(kb)); }
+
+function kbMatch(codes, code){ return Array.isArray(codes)?codes.includes(code):codes===code; }
+
+function codeToLabel(code){
   const m={Space:'Space',ShiftLeft:'Shift',ShiftRight:'Shift',
     ControlLeft:'Ctrl',ControlRight:'Ctrl',AltLeft:'Alt',AltRight:'Alt',
     ArrowUp:'↑',ArrowDown:'↓',ArrowLeft:'←',ArrowRight:'→',
@@ -754,6 +784,7 @@ function codeToLabel(code) {
   if(code.startsWith('Numpad')) return 'NP'+code.slice(6);
   return code;
 }
+
 const KB_ACTIONS=[
   {id:'moveForward', label:'前進'},
   {id:'moveBack',    label:'後退'},
@@ -768,81 +799,128 @@ const KB_ACTIONS=[
   {id:'hold',        label:'ホールド'},
   {id:'camReset',    label:'カメラリセット'},
 ];
+
+// _kbListening = {actionId, slotIdx} | null  (slotIdx=-1 で新規追加)
 let _kbListening=null;
 
-function renderKBModal() {
+function renderKBModal(){
   const kb=loadKB();
   const body=document.getElementById('keybind-modal-body');
   if(!body) return;
+
   const rows=KB_ACTIONS.map(a=>{
-    const isL=_kbListening===a.id;
-    return `<div class="kb-row${isL?' listening':''}">
+    const codes=kb[a.id]||[];
+    const canAdd=codes.length<3;
+
+    const chips=codes.map((code,i)=>{
+      const isL=_kbListening?.actionId===a.id&&_kbListening?.slotIdx===i;
+      const canDel=codes.length>1;
+      return `<div class="kb-key-chip">
+        <button class="kb-key-btn${isL?' waiting':''}"
+          onclick="window._kbStartListen('${a.id}',${i})">
+          ${isL?'…':`<kbd>${esc(codeToLabel(code))}</kbd>`}
+        </button>
+        ${canDel?`<button class="kb-key-del" title="削除"
+          onclick="window._kbRemove('${a.id}',${i})">×</button>`:''}
+      </div>`;
+    }).join('');
+
+    const addL=_kbListening?.actionId===a.id&&_kbListening?.slotIdx===-1;
+    const addBtn=canAdd
+      ?(addL
+        ?`<div class="kb-key-chip"><button class="kb-key-btn waiting" style="border-radius:4px;min-width:52px">…</button></div>`
+        :`<button class="kb-add-btn" title="キーを追加（最大3つ）"
+            onclick="window._kbAdd('${a.id}')">＋</button>`)
+      :'';
+
+    const isRowL=_kbListening?.actionId===a.id;
+    return `<div class="kb-row${isRowL?' listening':''}">
       <span class="kb-action-label">${a.label}</span>
-      <button class="kb-key-btn${isL?' waiting':''}" onclick="window._kbStartListen('${a.id}')">
-        ${isL?'押してください…':`<kbd>${esc(codeToLabel(kb[a.id]))}</kbd>`}
-      </button>
+      <div class="kb-keys-group">${chips}${addBtn}</div>
     </div>`;
   }).join('');
+
   body.innerHTML=`<div>${rows}</div>
     <div style="text-align:center;margin-top:14px">
-      <button class="btn-secondary" style="width:auto;padding:8px 22px;font-size:0.85rem" onclick="window._kbReset()">
-        デフォルトに戻す
-      </button>
+      <button class="btn-secondary" style="width:auto;padding:8px 22px;font-size:0.85rem"
+        onclick="window._kbReset()">デフォルトに戻す</button>
     </div>`;
 }
 
-function updateControlsPanel() {
+function updateControlsPanel(){
   const kb=loadKB();
-  const kbdOf=(...codes)=>codes.map(c=>`<kbd>${codeToLabel(c)}</kbd>`).join('');
+  // コントロールパネルは各方向の先頭キーのみ表示
+  const primary=codes=>codeToLabel(Array.isArray(codes)?codes[0]:codes);
+  const kbdP=codes=>`<kbd>${primary(codes)}</kbd>`;
   const set=(id,html)=>{ const el=document.getElementById(id); if(el) el.innerHTML=html; };
-  set('ctrl-keys-move', kbdOf(kb.moveForward,kb.moveLeft,kb.moveBack,kb.moveRight));
-  set('ctrl-keys-roty', kbdOf(kb.rotYccw,kb.rotYcw));
-  set('ctrl-keys-rotx', kbdOf(kb.rotXccw,kb.rotXcw));
-  set('ctrl-keys-soft', kbdOf(kb.softDrop));
-  set('ctrl-keys-hard', kbdOf(kb.hardDrop));
-  set('ctrl-keys-hold', kbdOf(kb.hold));
-  const rp=(id,code)=>{ const el=document.getElementById(id); if(el) el.textContent=codeToLabel(code); };
+  set('ctrl-keys-move',[kb.moveForward,kb.moveLeft,kb.moveBack,kb.moveRight].map(kbdP).join(''));
+  set('ctrl-keys-roty',[kb.rotYccw,kb.rotYcw].map(kbdP).join(''));
+  set('ctrl-keys-rotx',[kb.rotXccw,kb.rotXcw].map(kbdP).join(''));
+  set('ctrl-keys-soft',kbdP(kb.softDrop));
+  set('ctrl-keys-hard',kbdP(kb.hardDrop));
+  set('ctrl-keys-hold',kbdP(kb.hold));
+  const rp=(id,codes)=>{ const el=document.getElementById(id); if(el) el.textContent=primary(codes); };
   rp('rp-yccw',kb.rotYccw); rp('rp-ycw',kb.rotYcw);
   rp('rp-xccw',kb.rotXccw); rp('rp-xcw',kb.rotXcw);
 }
 
-window.openKeySettings = function() {
+window.openKeySettings=function(){
   _kbListening=null;
   document.getElementById('keybind-overlay').classList.add('open');
   renderKBModal();
 };
-window.closeKeySettings = function() {
+window.closeKeySettings=function(){
   _kbListening=null;
   document.getElementById('keybind-overlay').classList.remove('open');
-  updateControlsPanel(); // 閉じたときに操作パネルを更新
+  updateControlsPanel();
 };
-window._kbStartListen = function(actionId) {
-  _kbListening=actionId;
+window._kbStartListen=function(actionId,slotIdx){
+  _kbListening={actionId,slotIdx};
   renderKBModal();
 };
-window._kbReset = function() {
-  saveKB({...DEFAULT_KB}); _kbListening=null; renderKBModal();
+window._kbAdd=function(actionId){
+  _kbListening={actionId,slotIdx:-1};
+  renderKBModal();
+};
+window._kbRemove=function(actionId,slotIdx){
+  const kb=loadKB();
+  if((kb[actionId]||[]).length<=1) return; // 最低1つ残す
+  kb[actionId].splice(slotIdx,1);
+  saveKB(kb); renderKBModal(); updateControlsPanel();
+};
+window._kbReset=function(){
+  saveKB(structuredClone(DEFAULT_KB)); _kbListening=null; renderKBModal(); updateControlsPanel();
 };
 
-// キーバインドモーダル専用リスナー（他のキーハンドラより先に処理）
-document.addEventListener('keydown', e=>{
+// キーバインドモーダル専用リスナー（capture で最優先処理）
+document.addEventListener('keydown',e=>{
   if(!_kbListening) return;
   if(!document.getElementById('keybind-overlay')?.classList.contains('open')) return;
   e.preventDefault(); e.stopPropagation();
   if(e.code==='Escape'){ _kbListening=null; renderKBModal(); return; }
-  const kb=loadKB();
-  const target=_kbListening;
-  // 衝突する既存バインドと入れ替え
-  const conflict=Object.entries(kb).find(([k,v])=>v===e.code&&k!==target);
-  if(conflict) kb[conflict[0]]=kb[target];
-  kb[target]=e.code;
-  saveKB(kb);
-  _kbListening=null;
-  renderKBModal();
-}, {capture:true});
 
-// ページ読み込み時にコントロールパネルを初期化
-document.addEventListener('DOMContentLoaded', updateControlsPanel);
+  const kb=loadKB();
+  const {actionId,slotIdx}=_kbListening;
+  const newCode=e.code;
+
+  // 他のアクション・スロットから同じキーを除去（最低1つ残す）
+  for(const [act,codes] of Object.entries(kb)){
+    if(act===actionId) continue;
+    const idx=codes.indexOf(newCode);
+    if(idx!==-1&&codes.length>1) codes.splice(idx,1);
+  }
+
+  if(slotIdx===-1){
+    // 新規追加（同じキーがまだ未登録の場合のみ）
+    if(!kb[actionId].includes(newCode)) kb[actionId].push(newCode);
+  } else {
+    kb[actionId][slotIdx]=newCode;
+  }
+
+  saveKB(kb); _kbListening=null; renderKBModal(); updateControlsPanel();
+},{capture:true});
+
+document.addEventListener('DOMContentLoaded',updateControlsPanel);
 
 // ============================================================
 //  ミノ定義
@@ -1944,21 +2022,22 @@ async function initGame(db, roomId, myId) {
     const m=currentMinoCache;
     let upd=null, _seType=null;
     const kb=loadKB();
-    const isHold=e.code===kb.hold||
-      (kb.hold==='ShiftLeft'&&e.code==='ShiftRight')||
-      (kb.hold==='ShiftRight'&&e.code==='ShiftLeft');
-    if     (e.code===kb.moveForward){const d=getCamDirs().W; upd=tryMove(m,d[0],0,d[2]); _seType='move';}
-    else if(e.code===kb.moveBack)   {const d=getCamDirs().S; upd=tryMove(m,d[0],0,d[2]); _seType='move';}
-    else if(e.code===kb.moveLeft)   {const d=getCamDirs().A; upd=tryMove(m,d[0],0,d[2]); _seType='move';}
-    else if(e.code===kb.moveRight)  {const d=getCamDirs().D; upd=tryMove(m,d[0],0,d[2]); _seType='move';}
-    else if(e.code===kb.rotYccw)    {upd=tryRotateWithKick(m,'Yccw'); _seType='rotate';}
-    else if(e.code===kb.rotYcw)     {upd=tryRotateWithKick(m,'Ycw');  _seType='rotate';}
-    else if(e.code===kb.rotXccw)    {upd=tryRotateWithKick(m,'Xccw'); _seType='rotate';}
-    else if(e.code===kb.rotXcw)     {upd=tryRotateWithKick(m,'Xcw');  _seType='rotate';}
-    else if(e.code===kb.softDrop){
+    // Shiftは左右どちらでも hold として扱う
+    const isHold=kbMatch(kb.hold,e.code)||
+      (kbMatch(kb.hold,'ShiftLeft')&&e.code==='ShiftRight')||
+      (kbMatch(kb.hold,'ShiftRight')&&e.code==='ShiftLeft');
+    if     (kbMatch(kb.moveForward,e.code)){const d=getCamDirs().W; upd=tryMove(m,d[0],0,d[2]); _seType='move';}
+    else if(kbMatch(kb.moveBack,   e.code)){const d=getCamDirs().S; upd=tryMove(m,d[0],0,d[2]); _seType='move';}
+    else if(kbMatch(kb.moveLeft,   e.code)){const d=getCamDirs().A; upd=tryMove(m,d[0],0,d[2]); _seType='move';}
+    else if(kbMatch(kb.moveRight,  e.code)){const d=getCamDirs().D; upd=tryMove(m,d[0],0,d[2]); _seType='move';}
+    else if(kbMatch(kb.rotYccw,    e.code)){upd=tryRotateWithKick(m,'Yccw'); _seType='rotate';}
+    else if(kbMatch(kb.rotYcw,     e.code)){upd=tryRotateWithKick(m,'Ycw');  _seType='rotate';}
+    else if(kbMatch(kb.rotXccw,    e.code)){upd=tryRotateWithKick(m,'Xccw'); _seType='rotate';}
+    else if(kbMatch(kb.rotXcw,     e.code)){upd=tryRotateWithKick(m,'Xcw');  _seType='rotate';}
+    else if(kbMatch(kb.softDrop,   e.code)){
       e.preventDefault(); upd=doHardDrop(m); seSoftDrop();
     }
-    else if(e.code===kb.hardDrop){
+    else if(kbMatch(kb.hardDrop,   e.code)){
       e.preventDefault();
       upd=doHardDrop(m); seHardDrop();
       if(upd) await update(ref(db,`rooms/${roomId}/currentMino`),upd);
@@ -2052,9 +2131,9 @@ async function initGame(db, roomId, myId) {
   // カメラリセット（キーバインド設定に従う）
   window.addEventListener('keydown',e=>{
     const kb=loadKB();
-    const isReset=e.code===kb.camReset||
-      (kb.camReset==='ControlLeft'&&e.code==='ControlRight')||
-      (kb.camReset==='ControlRight'&&e.code==='ControlLeft');
+    const isReset=kbMatch(kb.camReset,e.code)||
+      (kbMatch(kb.camReset,'ControlLeft')&&e.code==='ControlRight')||
+      (kbMatch(kb.camReset,'ControlRight')&&e.code==='ControlLeft');
     if(isReset){
       e.preventDefault();
       camTheta=0; camPhi=1.52; camRadius=12; CAM_TARGET.y=3;
