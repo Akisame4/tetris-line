@@ -182,8 +182,12 @@
     .rot-cell.on { border-radius: 2px; }
 
     /* カメラ操作ヒント (左下) */
-    #cam-hint {
+    #bottom-left-panel {
       position: absolute; bottom: 16px; left: 16px;
+      display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+      pointer-events: auto;
+    }
+    #cam-hint {
       background: rgba(10,18,40,0.9); border: 1px solid #2a4070;
       border-radius: 10px; padding: 12px 16px; backdrop-filter: blur(6px);
       font-size: 0.78rem; color: #556; line-height: 1;
@@ -278,8 +282,6 @@
 
     /* ===== ルールボタン（ゲーム中） ===== */
     #rules-btn-ingame {
-      position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
-      pointer-events: auto;
       background: rgba(10,18,40,0.88); border: 1px solid #2a4070;
       border-radius: 20px; color: #7eb3ff;
       font-size: 0.76rem; padding: 5px 16px;
@@ -287,7 +289,7 @@
       backdrop-filter: blur(4px); white-space: nowrap;
       transition: border-color 0.15s;
     }
-    #rules-btn-ingame:hover { border-color: #4a80c0; transform: translateX(-50%); }
+    #rules-btn-ingame:hover { border-color: #4a80c0; }
 
     /* ===== ルールポップアップ ===== */
     #rules-overlay {
@@ -485,8 +487,6 @@
     }
     .kb-add-btn:hover { color: #7eb3ff; border-color: #4a80c0; }
     #keybind-btn-ingame {
-      position: absolute; bottom: 16px; left: calc(50% + 64px); transform: translateX(-50%);
-      pointer-events: auto;
       background: rgba(10,18,40,0.88); border: 1px solid #2a4070;
       border-radius: 20px; color: #7eb3ff;
       font-size: 0.76rem; padding: 5px 16px;
@@ -494,7 +494,7 @@
       backdrop-filter: blur(4px); white-space: nowrap;
       transition: border-color 0.15s;
     }
-    #keybind-btn-ingame:hover { border-color: #4a80c0; transform: translateX(-50%); }
+    #keybind-btn-ingame:hover { border-color: #4a80c0; }
   </style>
 </head>
 <body>
@@ -591,28 +591,31 @@
       <button class="btn-primary" id="post-btn-rematch">もう一戦</button>
     </div>
 
-    <div id="cam-hint">
-      <div class="cam-title">カメラ操作</div>
-      <div class="cam-row">
-        <div class="cam-keys"><kbd>左ドラッグ</kbd></div>
-        <span class="cam-label">視点回転</span>
+    <div id="bottom-left-panel">
+      <div style="display:flex;gap:6px;">
+        <button id="rules-btn-ingame" onclick="openRules()">📖 ルール</button>
+        <button id="keybind-btn-ingame" onclick="openKeySettings()">⚙ キー設定</button>
       </div>
-      <div class="cam-row">
-        <div class="cam-keys"><kbd>右ドラッグ</kbd></div>
-        <span class="cam-label">高さ調整</span>
-      </div>
-      <div class="cam-row">
-        <div class="cam-keys"><kbd>スクロール</kbd></div>
-        <span class="cam-label">ズーム</span>
-      </div>
-      <div class="cam-row">
-        <div class="cam-keys"><kbd>Ctrl</kbd></div>
-        <span class="cam-label">視点リセット</span>
+      <div id="cam-hint">
+        <div class="cam-title">カメラ操作</div>
+        <div class="cam-row">
+          <div class="cam-keys"><kbd>左ドラッグ</kbd></div>
+          <span class="cam-label">視点回転</span>
+        </div>
+        <div class="cam-row">
+          <div class="cam-keys"><kbd>右ドラッグ</kbd></div>
+          <span class="cam-label">高さ調整</span>
+        </div>
+        <div class="cam-row">
+          <div class="cam-keys"><kbd>スクロール</kbd></div>
+          <span class="cam-label">ズーム</span>
+        </div>
+        <div class="cam-row">
+          <div class="cam-keys"><kbd>Ctrl</kbd></div>
+          <span class="cam-label">視点リセット</span>
+        </div>
       </div>
     </div>
-
-    <button id="rules-btn-ingame" onclick="openRules()">📖 ルール</button>
-    <button id="keybind-btn-ingame" onclick="openKeySettings()">⚙ キー設定</button>
 
     <div id="gameover-overlay">
       <div class="gameover-box">
