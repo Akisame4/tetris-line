@@ -2433,7 +2433,8 @@ window.closeRules = () => document.getElementById('rules-overlay').classList.rem
       <div class="r-section">
         <h3>ゲーム終了</h3>
         <p>誰かが置いたブロックが<span class="r-accent">天井ライン（赤いライン）を超えた時点</span>でゲーム終了。その時点のスコアで順位が決まります。</p>
-        <p class="r-note">※ 天井を超えたブロックも得点計算には含まれます。</p>
+        <p>天井を超えたブロックを置いたプレイヤーには <span class="r-accent" style="color:#e94560"><b>−50pt</b> ペナルティ</span> が課されます。</p>
+        <p class="r-note">※ 天井を超えたブロックも得点計算には含まれます（ペナルティを差し引いた上でスコアが確定します）。</p>
       </div>
 
     </div>
