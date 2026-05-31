@@ -1069,7 +1069,7 @@ async function autoRejoin({roomId, pid}) {
     await update(ref(db, `rooms/${roomId}`), {
       status:'waiting', board:makeEmptyBoard(),
       currentTurn:null, turnOrder:null, turnIndex:0,
-      currentMino:null, winner:null, endReason:null, winFace:null, rematchTs:null,
+      currentMino:null, winner:null, endReason:null, endTriggeredBy:null, winFace:null, rematchTs:null,
       holdMino: Object.fromEntries(Object.keys(room.players).map(p=>[p, null])),
       nextMino: Object.fromEntries(Object.keys(room.players).map(p=>[p, randomMino()])),
       ...Object.fromEntries(Object.keys(room.players).map(p=>[`players/${p}/score`, 0])),
@@ -1478,6 +1478,7 @@ async function initGame(db, roomId, myId) {
   let holdUsed=false;
   let isMyTurn=false;
   let gameFinished=false;
+  let endTriggeredByCache=null;
 
   function updateRotPreviews(mino) {
     const KEYS=[
@@ -1666,6 +1667,9 @@ async function initGame(db, roomId, myId) {
     updateTurnBanner(activeTurnCache);
   });
 
+  onValue(ref(db,`rooms/${roomId}/endTriggeredBy`), snap=>{
+    endTriggeredByCache=snap.val();
+  });
   onValue(ref(db,`rooms/${roomId}/winner`), snap=>{
     if(snap.val()) showGameOver(snap.val());
   });
@@ -1925,7 +1929,14 @@ async function initGame(db, roomId, myId) {
 
     // 理由テキスト
     const reasonEl=document.getElementById('gameover-reason');
-    if(reasonEl) reasonEl.textContent='盤面満杯 — ラインポイントで順位決定';
+    if(reasonEl){
+      const triggerName=endTriggeredByCache?esc(playersCache[endTriggeredByCache]?.name||'?'):'?';
+      const isSelf=endTriggeredByCache===myId;
+      reasonEl.innerHTML=`盤面満杯 — ラインポイントで順位決定<br>
+        <span style="color:#e94560;font-size:0.82rem">
+          ⚠ ${isSelf?'あなた':triggerName}が天井を超えた → <b>-50pt</b> ペナルティ
+        </span>`;
+    }
 
     // ランキング行
     const ranksEl=document.getElementById('gameover-rankings');
@@ -1987,15 +1998,23 @@ async function initGame(db, roomId, myId) {
 
     // 終了チェック：デッドライン到達
     if(blocks.some(([,y,])=>y>=HEIGHT)){
+      const OVER_PENALTY=50;
       const updatedPlayers={...playersCache};
       for(const [pid,pts] of Object.entries(scoreAdd))
         updatedPlayers[pid]={...updatedPlayers[pid],score:(updatedPlayers[pid]?.score||0)+pts};
+      // 天井を超えたプレイヤーに -50pt ペナルティ
+      updatedPlayers[myId]={
+        ...updatedPlayers[myId],
+        score:(updatedPlayers[myId]?.score||0)-OVER_PENALTY
+      };
       const rankings=computeRankings(updatedPlayers);
       await update(ref(db,`rooms/${roomId}`),{
         board,
         ...scoreUpdates,
+        [`players/${myId}/score`]: updatedPlayers[myId].score,
         status:'finished',
         endReason:'full',
+        endTriggeredBy: myId,
         winner:rankings[0]?.pid||null,
       });
       holdUsed=false;
