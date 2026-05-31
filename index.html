@@ -548,7 +548,8 @@
   <div class="card" id="height-selector">
     <h2>盤面の高さ</h2>
     <div class="height-btns">
-      <button class="height-btn active" data-h="10">10（デフォルト）</button>
+      <button class="height-btn active" data-h="7">7（デフォルト）</button>
+      <button class="height-btn"        data-h="10">10</button>
       <button class="height-btn"        data-h="15">15</button>
       <button class="height-btn"        data-h="20">20</button>
     </div>
@@ -1026,7 +1027,7 @@ const PLAYER_COLORS_HEX = ['#e74c3c','#3498db','#2ecc71','#f1c40f'];
 const MINO_TYPES = ['O','T','S','Z','J','L','I'];
 function randomMino() { return MINO_TYPES[Math.floor(Math.random()*MINO_TYPES.length)]; }
 
-let selectedHeight = 10;
+let selectedHeight = 7;
 
 // ============================================================
 //  Firebase
@@ -2215,7 +2216,7 @@ window.closeRules = () => document.getElementById('rules-overlay').classList.rem
       <!-- 盤面とミノ -->
       <div class="r-section">
         <h3>盤面とミノ</h3>
-        <p>盤面サイズは <span class="r-accent">横7 × 奥7 × 高さ（10 / 15 / 20）</span>。高さはホストが試合前に選択します。ミノは7種類。各プレイヤーに固有の色（赤・青・緑・黄）が割り当てられます。</p>
+        <p>盤面サイズは <span class="r-accent">横7 × 奥7 × 高さ（7 / 10 / 15 / 20）</span>。高さはホストが試合前に選択します（デフォルト: 7）。ミノは7種類。各プレイヤーに固有の色（赤・青・緑・黄）が割り当てられます。</p>
         <div class="mino-showcase">
           <!-- O -->
           <div class="mino-item">
