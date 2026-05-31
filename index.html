@@ -1379,6 +1379,13 @@ async function initGame(db, roomId, myId) {
   const edgeGeo=new THREE.EdgesGeometry(cubeGeo);
   const cubeMats=COLORS_INT.map(c=>new THREE.MeshLambertMaterial({color:c}));
   const edgeMats=COLORS_INT.map(c=>new THREE.LineBasicMaterial({color:new THREE.Color(c).offsetHSL(0,0,0.25)}));
+  // 操作中ミノ用: emissive で自発光させてパルスアニメ
+  const activeCubeMats=COLORS_INT.map(c=>new THREE.MeshLambertMaterial({
+    color:c, emissive:new THREE.Color(c), emissiveIntensity:0.4,
+  }));
+  const activeEdgeMats=COLORS_INT.map(c=>new THREE.LineBasicMaterial({
+    color:new THREE.Color(c).offsetHSL(0,0,0.55),
+  }));
   // ゴースト: 照明に依存しない BasicMaterial + 明るいエッジで光って見える
   const ghostMats=COLORS_INT.map(c=>new THREE.MeshLambertMaterial({
     color:c, emissive:new THREE.Color(c).multiplyScalar(0.45),
@@ -1533,8 +1540,8 @@ async function initGame(db, roomId, myId) {
     blocks.forEach(([x,y,z])=>{
       if(y<0||y>=HEIGHT+3||x<0||x>=7||z<0||z>=7) return;
       const pos=new THREE.Vector3(x+0.5,y+0.5,z+0.5);
-      const mesh=new THREE.Mesh(cubeGeo,cubeMats[ci]);
-      const edge=new THREE.LineSegments(edgeGeo,edgeMats[ci]);
+      const mesh=new THREE.Mesh(cubeGeo,activeCubeMats[ci]);
+      const edge=new THREE.LineSegments(edgeGeo,activeEdgeMats[ci]);
       mesh.position.copy(pos); edge.position.copy(pos);
       minoGroup.add(mesh); minoGroup.add(edge);
     });
@@ -2181,6 +2188,10 @@ async function initGame(db, roomId, myId) {
       });
       if(p>=1){glowGroup.clear();glowStartTime=null;}
     }
+    // 操作中ミノのパルスグロー（約2秒周期でゆっくり点滅）
+    const pulse=0.35+0.28*Math.sin((t??performance.now())*0.0022);
+    activeCubeMats.forEach(m=>{ m.emissiveIntensity=pulse; });
+
     renderer.render(scene,camera);
   })();
 }
