@@ -202,6 +202,17 @@
     #cam-hint .cam-keys { min-width: 100px; }
     #cam-hint .cam-label { font-size: 0.78rem; color: #556; }
 
+    /* 視点軸インジケーター */
+    #axis-indicator {
+      background: rgba(10,18,40,0.9); border: 1px solid #2a4070;
+      border-radius: 10px; padding: 8px 10px; backdrop-filter: blur(6px);
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    #axis-indicator-label {
+      font-size: 0.65rem; color: #445; text-transform: uppercase;
+      letter-spacing: 1px; text-align: center;
+    }
+
     /* 操作一覧パネル + ガイド円トグル (右下) */
     #bottom-right-panel {
       position: absolute; bottom: 16px; right: 16px;
@@ -567,6 +578,7 @@
 <!-- ===== ゲーム画面 ===== -->
 <div id="screen-game" class="screen">
   <canvas id="game-canvas"></canvas>
+  <canvas id="particle-canvas" style="position:absolute;inset:0;pointer-events:none;z-index:95;display:block;"></canvas>
   <div id="hud">
     <div id="turn-banner">
       <div class="turn-label">CURRENT TURN</div>
@@ -592,6 +604,10 @@
     </div>
 
     <div id="bottom-left-panel">
+      <div id="axis-indicator">
+        <div id="axis-indicator-label">視点軸</div>
+        <canvas id="axis-canvas"></canvas>
+      </div>
       <div style="display:flex;gap:6px;">
         <button id="rules-btn-ingame" onclick="openRules()">📖 ルール</button>
         <button id="keybind-btn-ingame" onclick="openKeySettings()">⚙ キー設定</button>
@@ -653,6 +669,14 @@
             <span class="rot-prev-key"><kbd id="rp-xcw">F</kbd> X↻</span>
             <div id="rot-grid-f" class="rot-cell-grid"></div>
           </div>
+          <div class="rot-prev-item">
+            <span class="rot-prev-key"><kbd id="rp-zccw">Z</kbd> Z↺</span>
+            <div id="rot-grid-z" class="rot-cell-grid"></div>
+          </div>
+          <div class="rot-prev-item">
+            <span class="rot-prev-key"><kbd id="rp-zcw">C</kbd> Z↻</span>
+            <div id="rot-grid-c" class="rot-cell-grid"></div>
+          </div>
         </div>
       </div>
 
@@ -667,6 +691,10 @@
       <div class="ctrl-row">
         <div class="ctrl-keys" id="ctrl-keys-rotx"></div>
         <span class="ctrl-label">X軸回転（縦倒し）</span>
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-keys" id="ctrl-keys-rotz"></div>
+        <span class="ctrl-label">Z軸回転（ロール）</span>
       </div>
       <div class="ctrl-row">
         <div class="ctrl-keys" id="ctrl-keys-soft"></div>
@@ -755,6 +783,8 @@ const DEFAULT_KB = {
   rotYcw:      ['KeyE'],
   rotXccw:     ['KeyR'],
   rotXcw:      ['KeyF'],
+  rotZccw:     ['KeyZ'],
+  rotZcw:      ['KeyC'],
   softDrop:    ['ArrowDown'],
   hardDrop:    ['Space'],
   hold:        ['ShiftLeft'],
@@ -798,6 +828,8 @@ const KB_ACTIONS=[
   {id:'rotYcw',      label:'Y軸回転（右）'},
   {id:'rotXccw',     label:'X軸回転（前倒し）'},
   {id:'rotXcw',      label:'X軸回転（後ろ倒し）'},
+  {id:'rotZccw',     label:'Z軸回転（左ロール）'},
+  {id:'rotZcw',      label:'Z軸回転（右ロール）'},
   {id:'softDrop',    label:'瞬間落下'},
   {id:'hardDrop',    label:'確定ドロップ'},
   {id:'hold',        label:'ホールド'},
@@ -860,12 +892,14 @@ function updateControlsPanel(){
   set('ctrl-keys-move',[kb.moveForward,kb.moveLeft,kb.moveBack,kb.moveRight].map(kbdP).join(''));
   set('ctrl-keys-roty',[kb.rotYccw,kb.rotYcw].map(kbdP).join(''));
   set('ctrl-keys-rotx',[kb.rotXccw,kb.rotXcw].map(kbdP).join(''));
+  set('ctrl-keys-rotz',[kb.rotZccw,kb.rotZcw].map(kbdP).join(''));
   set('ctrl-keys-soft',kbdP(kb.softDrop));
   set('ctrl-keys-hard',kbdP(kb.hardDrop));
   set('ctrl-keys-hold',kbdP(kb.hold));
   const rp=(id,codes)=>{ const el=document.getElementById(id); if(el) el.textContent=primary(codes); };
   rp('rp-yccw',kb.rotYccw); rp('rp-ycw',kb.rotYcw);
   rp('rp-xccw',kb.rotXccw); rp('rp-xcw',kb.rotXcw);
+  rp('rp-zccw',kb.rotZccw); rp('rp-zcw',kb.rotZcw);
 }
 
 window.openKeySettings=function(){
@@ -1026,7 +1060,16 @@ function calcGhost(blocks, board) {
 // ============================================================
 //  定数
 // ============================================================
-const PLAYER_COLORS_HEX = ['#e74c3c','#3498db','#2ecc71','#f1c40f'];
+const PLAYER_COLORS_HEX = [
+  '#e74c3c', // 赤
+  '#3498db', // 青
+  '#2ecc71', // 緑
+  '#f1c40f', // 黄
+  '#e67e22', // オレンジ
+  '#9b59b6', // 紫
+  '#1abc9c', // 水色
+  '#e84393', // ピンク
+];
 const MINO_TYPES = ['O','T','S','Z','J','L','I'];
 function randomMino() { return MINO_TYPES[Math.floor(Math.random()*MINO_TYPES.length)]; }
 
@@ -1198,6 +1241,10 @@ window.startGame = async function() {
   const ids=Object.keys(snap.val());
   const order=ids.sort(()=>Math.random()-0.5);
 
+  // 8色からプレイヤー数分をランダムに選んで割り当て
+  const colorPool=[0,1,2,3,4,5,6,7].sort(()=>Math.random()-0.5);
+  const colorUpdates=Object.fromEntries(ids.map((pid,i)=>[`players/${pid}/colorIndex`,colorPool[i]]));
+
   // 各プレイヤーに次のミノを割り当て
   const nextMino={};
   ids.forEach(pid=>nextMino[pid]=randomMino());
@@ -1214,7 +1261,8 @@ window.startGame = async function() {
     status:'playing', height:selectedHeight,
     turnOrder:order, currentTurn:order[0], turnIndex:0,
     nextMino, currentMino,
-    holdMino: Object.fromEntries(ids.map(pid=>[pid,null]))
+    holdMino: Object.fromEntries(ids.map(pid=>[pid,null])),
+    ...colorUpdates,
   });
 };
 
@@ -1374,11 +1422,13 @@ async function initGame(db, roomId, myId) {
   updateCamera(); // 生成直後に初期位置を設定
 
   // --- ブロック素材 ---
-  const COLORS_INT=[0xe74c3c,0x3498db,0x2ecc71,0xf1c40f];
+  const COLORS_INT=[0xe74c3c,0x3498db,0x2ecc71,0xf1c40f,0xe67e22,0x9b59b6,0x1abc9c,0xe84393];
   const cubeGeo=new THREE.BoxGeometry(0.9,0.9,0.9);
   const edgeGeo=new THREE.EdgesGeometry(cubeGeo);
-  const cubeMats=COLORS_INT.map(c=>new THREE.MeshLambertMaterial({color:c}));
-  const edgeMats=COLORS_INT.map(c=>new THREE.LineBasicMaterial({color:new THREE.Color(c).offsetHSL(0,0,0.25)}));
+  const cubeMats=COLORS_INT.map(c=>new THREE.MeshLambertMaterial({
+    color:c, emissive:new THREE.Color(c), emissiveIntensity:0.18,
+  }));
+  const edgeMats=COLORS_INT.map(c=>new THREE.LineBasicMaterial({color:new THREE.Color(c).offsetHSL(0,0,0.38)}));
   // 操作中ミノ用: emissive で自発光させてパルスアニメ
   const activeCubeMats=COLORS_INT.map(c=>new THREE.MeshLambertMaterial({
     color:c, emissive:new THREE.Color(c), emissiveIntensity:0.4,
@@ -1496,6 +1546,8 @@ async function initGame(db, roomId, myId) {
       ['rot-grid-e','Ycw', 'xz'],
       ['rot-grid-r','Xccw','xy'],
       ['rot-grid-f','Xcw', 'xy'],
+      ['rot-grid-z','Zccw','xy'],
+      ['rot-grid-c','Zcw', 'xy'],
     ];
     for(const [domId,rotKey,proj] of KEYS){
       const el=document.getElementById(domId);
@@ -1650,7 +1702,7 @@ async function initGame(db, roomId, myId) {
     const lines=detectNewLines(localBoard, newBoard);
     localBoard=newBoard;
     syncBoard(localBoard);
-    if(lines.length>0){ showLineGlow(lines, localBoard); seLine(lines.length); }
+    if(lines.length>0){ showLineGlow(lines, localBoard); seLine(lines.length); spawnLineParticles(lines, localBoard); }
     renderHudPlayers(playersCache,activeTurnCache);
   });
 
@@ -1710,7 +1762,7 @@ async function initGame(db, roomId, myId) {
         const nextType=nextMinoCache[pid]??null;
         const score=p.score||0;
         return `
-          <div class="hud-player ${pid===activeTid?'hud-active':''}">
+          <div class="hud-player ${pid===activeTid?'hud-active':''}" data-pid="${esc(pid)}">
             <div class="hud-player-info">
               <span class="hud-dot" style="background:${color}"></span>
               <span>${esc(p.name)}${pid===myId?'<span class="hud-you"> あなた</span>':''}</span>
@@ -1944,7 +1996,7 @@ async function initGame(db, roomId, myId) {
       const isSelf=endTriggeredByCache===myId;
       reasonEl.innerHTML=`盤面満杯 — ラインポイントで順位決定<br>
         <span style="color:#e94560;font-size:0.82rem">
-          ⚠ ${isSelf?'あなた':triggerName}が天井を超えた → <b>-50pt</b> ペナルティ
+          ⚠ ${isSelf?'あなた':triggerName}が天井を超えた → <b>-30pt</b> ペナルティ
         </span>`;
     }
 
@@ -2008,11 +2060,11 @@ async function initGame(db, roomId, myId) {
 
     // 終了チェック：デッドライン到達
     if(blocks.some(([,y,])=>y>=HEIGHT)){
-      const OVER_PENALTY=50;
+      const OVER_PENALTY=30;
       const updatedPlayers={...playersCache};
       for(const [pid,pts] of Object.entries(scoreAdd))
         updatedPlayers[pid]={...updatedPlayers[pid],score:(updatedPlayers[pid]?.score||0)+pts};
-      // 天井を超えたプレイヤーに -50pt ペナルティ
+      // 天井を超えたプレイヤーに -30pt ペナルティ
       updatedPlayers[myId]={
         ...updatedPlayers[myId],
         score:(updatedPlayers[myId]?.score||0)-OVER_PENALTY
@@ -2064,6 +2116,8 @@ async function initGame(db, roomId, myId) {
     else if(kbMatch(kb.rotYcw,     e.code)){upd=tryRotateWithKick(m,'Ycw');  _seType='rotate';}
     else if(kbMatch(kb.rotXccw,    e.code)){upd=tryRotateWithKick(m,'Xccw'); _seType='rotate';}
     else if(kbMatch(kb.rotXcw,     e.code)){upd=tryRotateWithKick(m,'Xcw');  _seType='rotate';}
+    else if(kbMatch(kb.rotZccw,    e.code)){upd=tryRotateWithKick(m,'Zccw'); _seType='rotate';}
+    else if(kbMatch(kb.rotZcw,     e.code)){upd=tryRotateWithKick(m,'Zcw');  _seType='rotate';}
     else if(kbMatch(kb.softDrop,   e.code)){
       e.preventDefault(); upd=doHardDrop(m); seSoftDrop();
     }
@@ -2156,6 +2210,7 @@ async function initGame(db, roomId, myId) {
   window.addEventListener('resize',()=>{
     W=window.innerWidth; H=window.innerHeight;
     renderer.setSize(W,H); camera.aspect=W/H; camera.updateProjectionMatrix();
+    if(pCanvas){ pCanvas.width=W; pCanvas.height=H; }
   });
 
   // カメラリセット（キーバインド設定に従う）
@@ -2172,6 +2227,188 @@ async function initGame(db, roomId, myId) {
   });
 
   // (Phase 5以降向けに内部参照は関数スコープ内で完結)
+
+  // --- パーティクルエフェクト ---
+  const pCanvas = document.getElementById('particle-canvas');
+  const pCtx = pCanvas ? pCanvas.getContext('2d') : null;
+  if (pCanvas) { pCanvas.width = W; pCanvas.height = H; }
+  const _particles = [];
+
+  function spawnLineParticles(lines, board) {
+    if (!pCtx) return;
+    for (const line of lines) {
+      // 全マス同色チェック
+      const cells = line.dir === 'x'
+        ? [0,1,2,3,4,5,6].map(x => board[line.y]?.[line.z]?.[x] ?? 0)
+        : [0,1,2,3,4,5,6].map(z => board[line.y]?.[z]?.[line.x] ?? 0);
+      const firstVal = cells[0];
+      if (!firstVal || !cells.every(v => v === firstVal)) continue;
+
+      const colorIdx = firstVal - 1;
+      const color = PLAYER_COLORS_HEX[colorIdx] ?? '#ffffff';
+      const pid = Object.entries(playersCache).find(([,p]) => (p.colorIndex ?? 0) === colorIdx)?.[0];
+
+      // ターゲット: そのプレイヤーのスコア行
+      let tx = W * 0.88, ty = 80;
+      if (pid) {
+        const el = document.querySelector(`.hud-player[data-pid="${pid}"]`);
+        if (el) {
+          const r = el.getBoundingClientRect();
+          tx = r.right - 20;
+          ty = r.top + r.height / 2;
+        }
+      }
+
+      // 7マス各ブロックの中心からそれぞれ発射
+      const blockPositions = line.dir === 'x'
+        ? [0,1,2,3,4,5,6].map(x => [x + 0.5, line.y + 0.5, line.z + 0.5])
+        : [0,1,2,3,4,5,6].map(z => [line.x + 0.5, line.y + 0.5, z + 0.5]);
+
+      for (const [bx, by, bz] of blockPositions) {
+        const vec = new THREE.Vector3(bx, by, bz).project(camera);
+        if (vec.z >= 1) continue;
+        const sx = (vec.x + 1) / 2 * W;
+        const sy = (1 - vec.y) / 2 * H;
+
+        // 1ブロックあたり16個 × 7ブロック = 112個
+        for (let i = 0; i < 16; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const spd = 3.5 + Math.random() * 5;
+          _particles.push({
+            x: sx, y: sy,
+            vx: Math.cos(angle) * spd,
+            vy: Math.sin(angle) * spd,
+            tx, ty, color,
+            size: 5 + Math.random() * 3,
+            life: 0,
+            maxLife: 100 + Math.floor(Math.random() * 40),
+          });
+        }
+      }
+    }
+  }
+
+  function updateParticles() {
+    if (!pCtx) return;
+    pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+    if (_particles.length === 0) return;
+    for (let i = _particles.length - 1; i >= 0; i--) {
+      const p = _particles[i];
+      p.life++;
+      const t = p.life / p.maxLife;
+
+      if (t < 0.50) {
+        // バースト：勢いよく広がる
+        p.x += p.vx; p.y += p.vy;
+        p.vx *= 0.88; p.vy *= 0.88;
+      } else {
+        // フロー：ターゲットへ引き寄せ
+        const ease = Math.min((t - 0.50) / 0.50, 1);
+        const pull = 0.025 + ease * 0.10;
+        p.vx += (p.tx - p.x) * pull;
+        p.vy += (p.ty - p.y) * pull;
+        p.vx *= 0.80; p.vy *= 0.80;
+        p.x += p.vx; p.y += p.vy;
+      }
+
+      const alpha = t < 0.10 ? t / 0.10 : t > 0.80 ? (1 - t) / 0.20 : 1;
+      const sz = Math.max(0.5, p.size * (1 - t * 0.6));
+
+      pCtx.save();
+      pCtx.globalAlpha = alpha;
+      pCtx.shadowBlur = 22;
+      pCtx.shadowColor = p.color;
+      // コア（明るい中心）
+      pCtx.fillStyle = '#ffffff';
+      pCtx.beginPath();
+      pCtx.arc(p.x, p.y, sz * 0.45, 0, Math.PI * 2);
+      pCtx.fill();
+      // 外層（プレイヤーカラー）
+      pCtx.shadowBlur = 28;
+      pCtx.fillStyle = p.color;
+      pCtx.beginPath();
+      pCtx.arc(p.x, p.y, sz, 0, Math.PI * 2);
+      pCtx.fill();
+      pCtx.restore();
+
+      if (p.life >= p.maxLife) _particles.splice(i, 1);
+    }
+  }
+
+  // --- 視点軸インジケーター ---
+  const axisCanvas = document.getElementById('axis-canvas');
+  const axisCtx = axisCanvas ? axisCanvas.getContext('2d') : null;
+  const _axisDpr = Math.min(window.devicePixelRatio || 1, 2);
+  const _axisSz = 72;
+  if (axisCanvas) {
+    axisCanvas.width  = _axisSz * _axisDpr;
+    axisCanvas.height = _axisSz * _axisDpr;
+    axisCanvas.style.width  = _axisSz + 'px';
+    axisCanvas.style.height = _axisSz + 'px';
+  }
+
+  function drawAxisIndicator() {
+    if (!axisCtx) return;
+    const sz = _axisSz, cx = sz/2, cy = sz/2, len = sz * 0.31;
+    axisCtx.clearRect(0, 0, sz * _axisDpr, sz * _axisDpr);
+    axisCtx.save();
+    axisCtx.scale(_axisDpr, _axisDpr);
+
+    camera.updateMatrixWorld();
+    const e = camera.matrixWorldInverse.elements;
+
+    const AXES = [
+      {v:[1,0,0], color:'#e74c3c', neg:'#4a0e08', label:'X'},
+      {v:[0,1,0], color:'#2ecc71', neg:'#0a3518', label:'Y'},
+      {v:[0,0,1], color:'#4a8ee8', neg:'#0a1f44', label:'Z'},
+    ];
+
+    const proj = AXES.map(({v,color,neg,label}) => {
+      const px = e[0]*v[0]+e[4]*v[1]+e[8]*v[2];
+      const py = e[1]*v[0]+e[5]*v[1]+e[9]*v[2];
+      const pz = e[2]*v[0]+e[6]*v[1]+e[10]*v[2];
+      return {sx:px, sy:-py, sz:pz, color, neg, label};
+    });
+
+    // 負方向の軸（暗め、奥行き順不要）
+    for (const a of proj) {
+      axisCtx.beginPath();
+      axisCtx.moveTo(cx, cy);
+      axisCtx.lineTo(cx - a.sx*len, cy - a.sy*len);
+      axisCtx.strokeStyle = a.neg;
+      axisCtx.lineWidth = 1.5;
+      axisCtx.stroke();
+    }
+
+    // 正方向の軸（奥から手前順で描画）
+    const sorted = [...proj].sort((a,b) => a.sz - b.sz);
+    for (const a of sorted) {
+      const ex = cx + a.sx*len, ey = cy + a.sy*len;
+      axisCtx.beginPath();
+      axisCtx.moveTo(cx, cy);
+      axisCtx.lineTo(ex, ey);
+      axisCtx.strokeStyle = a.color;
+      axisCtx.lineWidth = 2.5;
+      axisCtx.stroke();
+      axisCtx.beginPath();
+      axisCtx.arc(ex, ey, 4, 0, Math.PI*2);
+      axisCtx.fillStyle = a.color;
+      axisCtx.fill();
+      axisCtx.fillStyle = a.color;
+      axisCtx.font = 'bold 10px monospace';
+      axisCtx.textAlign = 'center';
+      axisCtx.textBaseline = 'middle';
+      axisCtx.fillText(a.label, cx + a.sx*len*1.5, cy + a.sy*len*1.5);
+    }
+
+    // 中心点
+    axisCtx.beginPath();
+    axisCtx.arc(cx, cy, 2.5, 0, Math.PI*2);
+    axisCtx.fillStyle = '#667788';
+    axisCtx.fill();
+
+    axisCtx.restore();
+  }
 
   // --- レンダーループ ---
   (function animate(t){
@@ -2193,6 +2430,8 @@ async function initGame(db, roomId, myId) {
     activeCubeMats.forEach(m=>{ m.emissiveIntensity=pulse; });
 
     renderer.render(scene,camera);
+    drawAxisIndicator();
+    updateParticles();
   })();
 }
 
@@ -2320,7 +2559,7 @@ window.closeRules = () => document.getElementById('rules-overlay').classList.rem
           </li>
           <li>
             <div class="r-step-num">2</div>
-            <div class="r-step-body"><kbd>WASD</kbd> でミノを水平移動、<kbd>Q</kbd><kbd>E</kbd><kbd>R</kbd><kbd>F</kbd> で回転して位置を決める。<br>
+            <div class="r-step-body"><kbd>WASD</kbd> でミノを水平移動、<kbd>Q</kbd><kbd>E</kbd><kbd>R</kbd><kbd>F</kbd><kbd>Z</kbd><kbd>C</kbd> で回転して位置を決める。<br>
             <span style="color:#556;font-size:0.8rem">半透明のゴーストが落下先を示します。</span></div>
           </li>
           <li>
@@ -2343,6 +2582,7 @@ window.closeRules = () => document.getElementById('rules-overlay').classList.rem
           <tr><td>W / A / S / D</td><td>ミノを水平移動（カメラの向きに対応）</td></tr>
           <tr><td>Q / E</td><td>Y軸回転（真上から見て 左 / 右）</td></tr>
           <tr><td>R / F</td><td>X軸回転（縦に倒す 前 / 後）</td></tr>
+          <tr><td>Z / C</td><td>Z軸回転（左右にロール）</td></tr>
           <tr><td>↓</td><td>最下部へ瞬間落下（確定しない）</td></tr>
           <tr><td>Space</td><td>最下部へ落として<strong>確定</strong>・ターン終了</td></tr>
           <tr><td>Shift</td><td>ホールド（1ターンに1回まで）</td></tr>
@@ -2425,7 +2665,7 @@ window.closeRules = () => document.getElementById('rules-overlay').classList.rem
         <h3>ゴーストとガイド円</h3>
         <p>操作中のミノの下に<span class="r-accent">半透明の影（ゴースト）</span>が表示されます。Space を押すとゴーストの位置に確定されます。</p>
         <p>自分のターン中、ミノの周囲に<span class="r-accent">3色の輪（ガイド円）</span>が表示されます。輪をドラッグすると対応する軸に回転できます。<br>
-        <span style="color:#22cc44">●</span> 緑 = Y軸（水平回転）　<span style="color:#ee3333">●</span> 赤 = X軸　<span style="color:#3366ff">●</span> 青 = Z軸<br>
+        <span style="color:#22cc44">●</span> 緑 = Y軸（水平回転 / <kbd>Q</kbd><kbd>E</kbd>）　<span style="color:#ee3333">●</span> 赤 = X軸（縦倒し / <kbd>R</kbd><kbd>F</kbd>）　<span style="color:#3366ff">●</span> 青 = Z軸（ロール / <kbd>Z</kbd><kbd>C</kbd>）<br>
         右下の「ガイド円」ボタンで表示を切り替えられます。</p>
       </div>
 
@@ -2433,7 +2673,7 @@ window.closeRules = () => document.getElementById('rules-overlay').classList.rem
       <div class="r-section">
         <h3>ゲーム終了</h3>
         <p>誰かが置いたブロックが<span class="r-accent">天井ライン（赤いライン）を超えた時点</span>でゲーム終了。その時点のスコアで順位が決まります。</p>
-        <p>天井を超えたブロックを置いたプレイヤーには <span class="r-accent" style="color:#e94560"><b>−50pt</b> ペナルティ</span> が課されます。</p>
+        <p>天井を超えたブロックを置いたプレイヤーには <span class="r-accent" style="color:#e94560"><b>−30pt</b> ペナルティ</span> が課されます。</p>
         <p class="r-note">※ 天井を超えたブロックも得点計算には含まれます（ペナルティを差し引いた上でスコアが確定します）。</p>
       </div>
 
@@ -2444,7 +2684,7 @@ window.closeRules = () => document.getElementById('rules-overlay').classList.rem
 <!-- ===== BGM ボリュームコントロール (全画面共通・常時表示) ===== -->
 <div id="bgm-vol-ctrl">
   <span id="bgm-vol-icon">♪</span>
-  <input type="range" id="bgm-vol-slider" min="0" max="100" value="50">
+  <input type="range" id="bgm-vol-slider" min="0" max="100" value="20">
   <span style="color:#7eb3ff;font-size:0.8rem;margin-left:2px;user-select:none;line-height:1">SE</span>
   <input type="range" id="se-vol-slider" min="0" max="100" value="60">
 </div>
@@ -2486,7 +2726,7 @@ window.closeRules = () => document.getElementById('rules-overlay').classList.rem
 // ===== BGM 管理 =====
 const bgm = document.getElementById('bgm');
 const _savedVol = parseFloat(localStorage.getItem('tn_volume'));
-bgm.volume = isNaN(_savedVol) ? 0.5 : _savedVol;
+bgm.volume = isNaN(_savedVol) ? 0.2 : _savedVol;
 
 let bgmUnlocked = false;
 
