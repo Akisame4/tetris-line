@@ -60,19 +60,6 @@
     .error-msg { color: #e94560; font-size: 0.82rem; margin-top: -6px; margin-bottom: 8px; display: none; }
     .error-msg.show { display: block; }
 
-    /* 高さ選択 */
-    #height-selector { display: none; }
-    #height-selector.show { display: block; }
-    .height-btns { display: flex; gap: 8px; }
-    .height-btn {
-      flex: 1; padding: 11px 0; background: #0f3460; color: #aac;
-      border: 1px solid #2a4070; border-radius: 8px; cursor: pointer;
-      font-size: 0.95rem; font-weight: 600; transition: all 0.15s; width: auto;
-    }
-    .height-btn:hover { opacity: 0.85; }
-    .height-btn.active { background: #e94560; color: #fff; border-color: #e94560; }
-    #height-display { display: none; text-align: center; color: #7eb3ff; font-size: 0.9rem; margin-top: 4px; }
-    #height-display.show { display: block; }
 
     /* ===== ゲーム画面 ===== */
     #screen-game {
@@ -106,15 +93,16 @@
     #hud-players {
       position: absolute; top: 62px; right: 16px;
       background: rgba(10,18,40,0.9); border: 1px solid #2a4070;
-      border-radius: 10px; padding: 12px 16px; backdrop-filter: blur(6px);
-      min-width: 180px;
+      border-radius: 10px; padding: 14px 20px; backdrop-filter: blur(6px);
+      min-width: 240px;
     }
-    .hud-section-label { font-size: 0.68rem; color: #445; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; text-align: center; }
-    .hud-player { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid #1a2840; font-size: 0.82rem; }
+    .hud-section-label { font-size: 0.72rem; color: #445; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; text-align: center; }
+    .hud-player { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #1a2840; font-size: 1rem; }
     .hud-player:last-child { border-bottom: none; }
-    .hud-player-info { display: flex; align-items: center; gap: 7px; }
-    .hud-dot    { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-    .hud-you    { color: #445; font-size: 0.72rem; }
+    .hud-player-info { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; overflow: hidden; }
+    .hud-player-info > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .hud-dot    { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+    .hud-you    { color: #445; font-size: 0.8rem; }
     .hud-active { font-weight: bold; }
     .mini-preview-grid {
       display: grid;
@@ -506,6 +494,53 @@
       transition: border-color 0.15s;
     }
     #keybind-btn-ingame:hover { border-color: #4a80c0; }
+
+    /* ゲームモードセレクター */
+    #mode-selector { display: none; }
+    #mode-selector.show { display: block; }
+    .mode-btns { display: flex; gap: 8px; }
+    .mode-btn {
+      flex: 1; padding: 11px 0; background: #0f3460; color: #aac;
+      border: 1px solid #2a4070; border-radius: 8px; cursor: pointer;
+      font-size: 0.95rem; font-weight: 600; transition: all 0.15s; width: auto;
+    }
+    .mode-btn:hover { opacity: 0.85; }
+    .mode-btn.active { background: #e94560; color: #fff; border-color: #e94560; }
+    #mode-display { display: none; text-align: center; color: #7eb3ff; font-size: 0.9rem; margin-top: 4px; }
+    #mode-display.show { display: block; }
+
+    /* 終了得点セレクター */
+    #target-score-selector { display: none; }
+    #target-score-selector.show { display: block; }
+    .target-score-btns { display: flex; gap: 8px; }
+    .target-score-btn {
+      flex: 1; padding: 11px 0; background: #0f3460; color: #aac;
+      border: 1px solid #2a4070; border-radius: 8px; cursor: pointer;
+      font-size: 0.95rem; font-weight: 600; transition: all 0.15s; width: auto;
+    }
+    .target-score-btn:hover { opacity: 0.85; }
+    .target-score-btn.active { background: #e94560; color: #fff; border-color: #e94560; }
+    #target-score-display { display: none; text-align: center; color: #7eb3ff; font-size: 0.9rem; margin-top: 4px; }
+    #target-score-display.show { display: block; }
+
+    /* スコアポップアップアニメーション */
+    .score-popup {
+      position: fixed;
+      font-size: 1.6rem;
+      font-weight: bold;
+      pointer-events: none;
+      animation: scorePopup 1.6s ease-out forwards;
+      z-index: 99999;
+      text-shadow: 0 0 16px currentColor, 0 0 32px currentColor;
+      white-space: nowrap;
+      letter-spacing: 1px;
+    }
+    @keyframes scorePopup {
+      0%   { opacity: 0; transform: translateY(0) scale(0.6); }
+      10%  { opacity: 1; transform: translateY(-10px) scale(1.35); }
+      40%  { opacity: 1; transform: translateY(-36px) scale(1.1); }
+      100% { opacity: 0; transform: translateY(-72px) scale(0.9); }
+    }
   </style>
 </head>
 <body>
@@ -555,18 +590,30 @@
     <p class="status-text" id="waiting-status">参加待ち...</p>
   </div>
 
+
+  <!-- モード選択（ホストのみ） -->
+  <div class="card" id="mode-selector">
+    <h2>ゲームモード</h2>
+    <div class="mode-btns">
+      <button class="mode-btn active" data-m="build">ビルドモード</button>
+      <button class="mode-btn" data-m="normal">ノーマルモード</button>
+    </div>
+  </div>
+  <!-- モード表示（非ホスト） -->
+  <p id="mode-display">モード: <b id="mode-display-val">—</b></p>
+
   <!-- ホストのみ表示 -->
-  <div class="card" id="height-selector">
-    <h2>盤面の高さ</h2>
-    <div class="height-btns">
-      <button class="height-btn active" data-h="7">7（デフォルト）</button>
-      <button class="height-btn"        data-h="10">10</button>
-      <button class="height-btn"        data-h="15">15</button>
-      <button class="height-btn"        data-h="20">20</button>
+  <div class="card" id="target-score-selector">
+    <h2>終了得点</h2>
+    <div class="target-score-btns">
+      <button class="target-score-btn" data-s="15">15pt🔧</button>
+      <button class="target-score-btn active" data-s="250">250pt</button>
+      <button class="target-score-btn" data-s="300">300pt</button>
+      <button class="target-score-btn" data-s="500">500pt</button>
     </div>
   </div>
   <!-- 非ホスト表示 -->
-  <p id="height-display">盤面の高さ: <b id="height-display-val">—</b></p>
+  <p id="target-score-display">終了得点: <b id="target-score-display-val">—</b>pt</p>
 
   <button class="btn-success" id="btn-start" onclick="startGame()" disabled>ゲームを開始する</button>
   <div style="text-align:center;margin-top:10px;display:flex;gap:8px;justify-content:center">
@@ -1073,7 +1120,9 @@ const PLAYER_COLORS_HEX = [
 const MINO_TYPES = ['O','T','S','Z','J','L','I'];
 function randomMino() { return MINO_TYPES[Math.floor(Math.random()*MINO_TYPES.length)]; }
 
-let selectedHeight = 7;
+const selectedHeight = 20;
+let selectedTargetScore = 250;
+let selectedMode = 'build';
 
 // ============================================================
 //  Firebase
@@ -1145,7 +1194,7 @@ window.createRoom = async function() {
   const name=getPlayerName(), roomId=makeRoomId(), pid=makeId();
   setLobbyDisabled(true);
   await set(ref(db,`rooms/${roomId}`), {
-    status:'waiting', host:pid, height:selectedHeight,
+    status:'waiting', host:pid, height:selectedHeight, targetScore:selectedTargetScore, mode:selectedMode,
     board:makeEmptyBoard(), currentTurn:null, turnOrder:null, turnIndex:0,
     players:{[pid]:{name,colorIndex:0,score:0}}
   });
@@ -1179,22 +1228,42 @@ function enterWaiting(roomId) {
   document.getElementById('display-room-id').textContent=roomId;
   showScreen('waiting'); setLobbyDisabled(false);
 
-  // 高さ選択UI: ホストのみ表示
+  // モードセレクター
   if(isHost){
-    document.getElementById('height-selector').classList.add('show');
-    document.querySelectorAll('.height-btn').forEach(btn=>{
-      btn.addEventListener('click',async ()=>{
-        selectedHeight=parseInt(btn.dataset.h);
-        document.querySelectorAll('.height-btn').forEach(b=>b.classList.remove('active'));
+    document.getElementById('mode-selector').classList.add('show');
+    document.querySelectorAll('.mode-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        selectedMode=btn.dataset.m;
+        document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
         btn.classList.add('active');
-        await update(ref(db,`rooms/${myRoomId}`),{height:selectedHeight});
+        await update(ref(db,`rooms/${myRoomId}`),{mode:selectedMode});
       });
     });
   } else {
-    document.getElementById('height-display').classList.add('show');
-    onValue(ref(db,`rooms/${roomId}/height`), snap=>{
-      const h=snap.val();
-      if(h) document.getElementById('height-display-val').textContent=h;
+    document.getElementById('mode-display').classList.add('show');
+    onValue(ref(db,`rooms/${roomId}/mode`), snap=>{
+      const m=snap.val();
+      if(m) document.getElementById('mode-display-val').textContent=
+        m==='build'?'ビルドモード':'ノーマルモード';
+    });
+  }
+
+  // 終了得点セレクター
+  if(isHost){
+    document.getElementById('target-score-selector').classList.add('show');
+    document.querySelectorAll('.target-score-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        selectedTargetScore=parseInt(btn.dataset.s);
+        document.querySelectorAll('.target-score-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        await update(ref(db,`rooms/${myRoomId}`),{targetScore:selectedTargetScore});
+      });
+    });
+  } else {
+    document.getElementById('target-score-display').classList.add('show');
+    onValue(ref(db,`rooms/${roomId}/targetScore`), snap=>{
+      const s=snap.val();
+      if(s) document.getElementById('target-score-display-val').textContent=s;
     });
   }
 
@@ -1258,7 +1327,7 @@ window.startGame = async function() {
   };
 
   await update(ref(db,`rooms/${myRoomId}`),{
-    status:'playing', height:selectedHeight,
+    status:'playing', height:selectedHeight, targetScore:selectedTargetScore, mode:selectedMode,
     turnOrder:order, currentTurn:order[0], turnIndex:0,
     nextMino, currentMino,
     holdMino: Object.fromEntries(ids.map(pid=>[pid,null])),
@@ -1476,6 +1545,7 @@ async function initGame(db, roomId, myId) {
   const glowGroup=new THREE.Group(); scene.add(glowGroup);
   let glowStartTime=null;
   const GLOW_DURATION=1300;
+  let glowIsClearMode=false;
 
   // --- 回転ギズモ (Blender風3軸リング) ---
   const gizmoGroup=new THREE.Group();
@@ -1539,6 +1609,9 @@ async function initGame(db, roomId, myId) {
   let isMyTurn=false;
   let gameFinished=false;
   let endTriggeredByCache=null;
+  let endReasonCache=null;
+  let TARGET_SCORE=250;
+  let GAME_MODE='build';
 
   function updateRotPreviews(mino) {
     const KEYS=[
@@ -1616,7 +1689,7 @@ async function initGame(db, roomId, myId) {
   }
 
   // --- ライン完成グロー ---
-  function showLineGlow(lines, board){
+  function showLineGlow(lines, board, isClearMode=false){
     glowGroup.clear();
     for(const line of lines){
       const coords=line.dir==='x'
@@ -1647,12 +1720,15 @@ async function initGame(db, roomId, myId) {
       }
     }
     glowStartTime=performance.now();
+    glowIsClearMode=isClearMode;
   }
 
   // --- 初期データ一括取得（リスナー登録前に全キャッシュを確定）---
   {
     const initSnap=await get(ref(db,`rooms/${roomId}`));
     const d=initSnap.val()||{};
+    TARGET_SCORE=d.targetScore||250;
+    GAME_MODE=d.mode||'build';
     localBoard=d.board||null;
     playersCache=d.players||{};
     nextMinoCache=d.nextMino||{};
@@ -1696,13 +1772,33 @@ async function initGame(db, roomId, myId) {
     });
   }
 
+  // --- スコアポップアップ ---
+  const _prevScores = Object.fromEntries(
+    Object.entries(playersCache).map(([pid,p])=>[pid, p.score??0])
+  );
+
+  function _showScorePopup(pid, delta, player){
+    const el=document.querySelector(`#hud-players .hud-player[data-pid="${pid}"]`);
+    if(!el) return;
+    const r=el.getBoundingClientRect();
+    const color=delta>0?(PLAYER_COLORS_HEX[player?.colorIndex??0]):'#e94560';
+    const pop=document.createElement('div');
+    pop.className='score-popup';
+    pop.textContent=(delta>0?'+':'')+delta+' pt';
+    pop.style.color=color;
+    pop.style.left=(r.right-64)+'px';
+    pop.style.top=(r.top+r.height/2-10)+'px';
+    document.body.appendChild(pop);
+    pop.addEventListener('animationend',()=>pop.remove());
+  }
+
   // --- Firebase リスナー ---
   onValue(ref(db,`rooms/${roomId}/board`), snap=>{
     const newBoard=snap.val();
     const lines=detectNewLines(localBoard, newBoard);
     localBoard=newBoard;
     syncBoard(localBoard);
-    if(lines.length>0){ showLineGlow(lines, localBoard); seLine(lines.length); spawnLineParticles(lines, localBoard); }
+    if(lines.length>0){ showLineGlow(lines,localBoard,GAME_MODE==='normal'); seLine(lines.length); spawnLineParticles(lines,localBoard); }
     renderHudPlayers(playersCache,activeTurnCache);
   });
 
@@ -1724,16 +1820,36 @@ async function initGame(db, roomId, myId) {
   });
 
   onValue(ref(db,`rooms/${roomId}/players`), snap=>{
-    playersCache=snap.val()||{};
+    const newPlayers=snap.val()||{};
+    const scoreChanges={};
+    for(const [pid,p] of Object.entries(newPlayers)){
+      const prev=_prevScores[pid]??0, curr=p.score??0;
+      if(curr!==prev) scoreChanges[pid]=curr-prev;
+      _prevScores[pid]=curr;
+    }
+    playersCache=newPlayers;
     renderHudPlayers(playersCache,activeTurnCache);
     updateTurnBanner(activeTurnCache);
+    for(const [pid,delta] of Object.entries(scoreChanges)){
+      if(delta!==0) _showScorePopup(pid,delta,newPlayers[pid]);
+    }
   });
 
   onValue(ref(db,`rooms/${roomId}/endTriggeredBy`), snap=>{
     endTriggeredByCache=snap.val();
   });
+  onValue(ref(db,`rooms/${roomId}/endReason`), snap=>{
+    endReasonCache=snap.val();
+  });
   onValue(ref(db,`rooms/${roomId}/winner`), snap=>{
-    if(snap.val()) showGameOver(snap.val());
+    if(!snap.val()) return;
+    get(ref(db,`rooms/${roomId}`)).then(r=>{
+      const d=r.val()||{};
+      if(d.players) playersCache=d.players;
+      endTriggeredByCache=d.endTriggeredBy||null;
+      endReasonCache=d.endReason||null;
+      showGameOver(snap.val());
+    });
   });
 
   onValue(ref(db,`rooms/${roomId}/currentTurn`), snap=>{
@@ -1757,6 +1873,7 @@ async function initGame(db, roomId, myId) {
     const sorted=Object.entries(players).sort((a,b)=>a[1].colorIndex-b[1].colorIndex);
     document.getElementById('hud-players').innerHTML=
       '<div class="hud-section-label">Players / Next</div>' +
+      `<div style="text-align:center;font-size:0.72rem;color:#7eb3ff99;margin-bottom:8px;letter-spacing:0.5px">目標 ${TARGET_SCORE}pt</div>` +
       sorted.map(([pid,p])=>{
         const color=PLAYER_COLORS_HEX[p.colorIndex];
         const nextType=nextMinoCache[pid]??null;
@@ -1767,7 +1884,7 @@ async function initGame(db, roomId, myId) {
               <span class="hud-dot" style="background:${color}"></span>
               <span>${esc(p.name)}${pid===myId?'<span class="hud-you"> あなた</span>':''}</span>
             </div>
-            <span style="color:${color};font-size:0.78rem;font-weight:bold;min-width:28px;text-align:right">${score}pt</span>
+            <span style="color:${color};font-size:1.1rem;font-weight:bold;width:64px;flex-shrink:0;text-align:right">${score}pt</span>
             <div class="mini-preview-grid">${buildMiniPreview(nextType,color)}</div>
           </div>`;
       }).join('');
@@ -1940,6 +2057,39 @@ async function initGame(db, roomId, myId) {
     return lines;
   }
 
+  // ノーマルモード: 完成ラインをボードから消去して上をシフトダウン
+  function clearLines(board, lines) {
+    const b=board.map(row=>row.map(col=>[...col]));
+    const H=b.length;
+    // x方向ライン: zごとにグループ化
+    const xByZ={};
+    // z方向ライン: xごとにグループ化
+    const zByX={};
+    for(const l of lines){
+      if(l.dir==='x') (xByZ[l.z]||(xByZ[l.z]=[])).push(l.y);
+      else            (zByX[l.x]||(zByX[l.x]=[])).push(l.y);
+    }
+    // x方向ライン消去（固定zの列をシフト）
+    for(const [zs,ys] of Object.entries(xByZ)){
+      const z=parseInt(zs), ySet=new Set(ys);
+      const keep=[];
+      for(let y=0;y<H;y++) if(!ySet.has(y)) keep.push([...b[y][z]]);
+      for(let y=0;y<keep.length;y++) b[y][z]=keep[y];
+      for(let y=keep.length;y<H;y++) b[y][z]=Array(7).fill(0);
+    }
+    // z方向ライン消去（固定xの列をシフト）
+    for(const [xs,ys] of Object.entries(zByX)){
+      const x=parseInt(xs), ySet=new Set(ys);
+      const keep=[];
+      for(let y=0;y<H;y++){
+        if(!ySet.has(y)) keep.push(Array.from({length:7},(_,z)=>b[y][z][x]));
+      }
+      for(let y=0;y<keep.length;y++) for(let z=0;z<7;z++) b[y][z][x]=keep[y][z];
+      for(let y=keep.length;y<H;y++) for(let z=0;z<7;z++) b[y][z][x]=0;
+    }
+    return b;
+  }
+
   // 完成ラインのスコア計算
   // - 各プレイヤー: 自分のブロック数 × 1pt
   // - 完成させた人(completerId): +1pt ボーナス（ライン1本ごと）
@@ -1992,12 +2142,19 @@ async function initGame(db, roomId, myId) {
     // 理由テキスト
     const reasonEl=document.getElementById('gameover-reason');
     if(reasonEl){
-      const triggerName=endTriggeredByCache?esc(playersCache[endTriggeredByCache]?.name||'?'):'?';
-      const isSelf=endTriggeredByCache===myId;
-      reasonEl.innerHTML=`盤面満杯 — ラインポイントで順位決定<br>
-        <span style="color:#e94560;font-size:0.82rem">
-          ⚠ ${isSelf?'あなた':triggerName}が天井を超えた → <b>-30pt</b> ペナルティ
-        </span>`;
+      if(endReasonCache==='score'){
+        const triggerName=endTriggeredByCache?esc(playersCache[endTriggeredByCache]?.name||'?'):'?';
+        const isSelf=endTriggeredByCache===myId;
+        reasonEl.innerHTML=`<span style="color:#27ae60;font-weight:bold">🏆 目標 ${TARGET_SCORE}pt 到達！</span><br>
+          <span style="color:#556;font-size:0.82rem">${isSelf?'あなた':triggerName}が決着をつけた</span>`;
+      } else {
+        const triggerName=endTriggeredByCache?esc(playersCache[endTriggeredByCache]?.name||'?'):'?';
+        const isSelf=endTriggeredByCache===myId;
+        reasonEl.innerHTML=`盤面満杯 — ラインポイントで順位決定<br>
+          <span style="color:#e94560;font-size:0.82rem">
+            ⚠ ${isSelf?'あなた':triggerName}が天井を超えた → <b>-30pt</b> ペナルティ
+          </span>`;
+      }
     }
 
     // ランキング行
@@ -2058,22 +2215,27 @@ async function initGame(db, roomId, myId) {
       Object.entries(scoreAdd).map(([pid,pts])=>[`players/${pid}/score`,(playersCache[pid]?.score||0)+pts])
     );
 
-    // 終了チェック：デッドライン到達
+    // ノーマルモード: 完成ラインを消去したボードを使用
+    const finalBoard=(GAME_MODE==='normal'&&newLines.length>0)
+      ? clearLines(board, newLines) : board;
+
+    // スコア加算後の全プレイヤー得点を計算
+    const updatedScores=Object.fromEntries(
+      Object.entries(playersCache).map(([pid,p])=>[pid,(p.score||0)+(scoreAdd[pid]||0)])
+    );
+
+    // 終了チェック①：デッドライン到達
     if(blocks.some(([,y,])=>y>=HEIGHT)){
       const OVER_PENALTY=30;
-      const updatedPlayers={...playersCache};
-      for(const [pid,pts] of Object.entries(scoreAdd))
-        updatedPlayers[pid]={...updatedPlayers[pid],score:(updatedPlayers[pid]?.score||0)+pts};
-      // 天井を超えたプレイヤーに -30pt ペナルティ
-      updatedPlayers[myId]={
-        ...updatedPlayers[myId],
-        score:(updatedPlayers[myId]?.score||0)-OVER_PENALTY
-      };
+      updatedScores[myId]=(updatedScores[myId]||0)-OVER_PENALTY;
+      const updatedPlayers=Object.fromEntries(
+        Object.entries(playersCache).map(([pid,p])=>[pid,{...p,score:updatedScores[pid]}])
+      );
       const rankings=computeRankings(updatedPlayers);
       await update(ref(db,`rooms/${roomId}`),{
-        board,
+        board:finalBoard,
         ...scoreUpdates,
-        [`players/${myId}/score`]: updatedPlayers[myId].score,
+        [`players/${myId}/score`]: updatedScores[myId],
         status:'finished',
         endReason:'full',
         endTriggeredBy: myId,
@@ -2083,14 +2245,49 @@ async function initGame(db, roomId, myId) {
       return;
     }
 
-    await update(ref(db,`rooms/${roomId}`),{
-      board,
-      ...scoreUpdates,
-      currentTurn: nextPid,
-      turnIndex:   nextIdx,
-      currentMino: {type:nextType,pivotX:3,pivotY:HEIGHT+2,pivotZ:3,mat:[...ID_MAT],rotY:0,owner:nextPid},
-      [`nextMino/${nextPid}`]: randomMino(),
-    });
+    // 終了チェック②：得点上限到達
+    if(Object.values(updatedScores).some(s=>s>=TARGET_SCORE)){
+      const updatedPlayers=Object.fromEntries(
+        Object.entries(playersCache).map(([pid,p])=>[pid,{...p,score:updatedScores[pid]}])
+      );
+      const rankings=computeRankings(updatedPlayers);
+      await update(ref(db,`rooms/${roomId}`),{
+        board:finalBoard,
+        ...scoreUpdates,
+        status:'finished',
+        endReason:'score',
+        endTriggeredBy: myId,
+        winner:rankings[0]?.pid||null,
+      });
+      holdUsed=false;
+      return;
+    }
+
+    if(GAME_MODE==='normal'&&newLines.length>0){
+      // Phase 1: 中間ボード（ブロック配置済み・ライン未消去）を書き込む
+      // → 全クライアントの board リスナーが点滅アニメを起動する
+      await update(ref(db,`rooms/${roomId}`),{board});
+      // 点滅アニメ完了を待つ
+      await new Promise(r=>setTimeout(r,1000));
+      // Phase 2: ライン消去後のボード＋ターン進行を書き込む
+      await update(ref(db,`rooms/${roomId}`),{
+        board:finalBoard,
+        ...scoreUpdates,
+        currentTurn:nextPid,
+        turnIndex:nextIdx,
+        currentMino:{type:nextType,pivotX:3,pivotY:HEIGHT+2,pivotZ:3,mat:[...ID_MAT],rotY:0,owner:nextPid},
+        [`nextMino/${nextPid}`]:randomMino(),
+      });
+    }else{
+      await update(ref(db,`rooms/${roomId}`),{
+        board:finalBoard,
+        ...scoreUpdates,
+        currentTurn:nextPid,
+        turnIndex:nextIdx,
+        currentMino:{type:nextType,pivotX:3,pivotY:HEIGHT+2,pivotZ:3,mat:[...ID_MAT],rotY:0,owner:nextPid},
+        [`nextMino/${nextPid}`]:randomMino(),
+      });
+    }
 
     holdUsed=false;
   }
@@ -2415,11 +2612,21 @@ async function initGame(db, roomId, myId) {
     requestAnimationFrame(animate);
     if(glowStartTime!==null){
       const elapsed=(t??performance.now())-glowStartTime;
-      const p=Math.min(elapsed/GLOW_DURATION,1);
-      // 最初8%で素早くフラッシュイン → 残り92%でパルスしながらフェードアウト
-      const alpha=p<0.08
-        ?p/0.08
-        :(1-(p-0.08)/0.92)*(0.65+0.35*Math.sin((p-0.08)/0.92*Math.PI*4));
+      const dur=glowIsClearMode?950:GLOW_DURATION;
+      const p=Math.min(elapsed/dur,1);
+      let alpha;
+      if(glowIsClearMode){
+        // ノーマルモード: 4回点滅してから消える
+        const blinks=4;
+        alpha=p<0.88
+          ?(0.25+0.75*Math.abs(Math.sin(p*blinks*Math.PI)))
+          :(1-p)/0.12*0.5;
+      }else{
+        // ビルドモード: 最初8%で素早くフラッシュイン → 残り92%でパルスしながらフェードアウト
+        alpha=p<0.08
+          ?p/0.08
+          :(1-(p-0.08)/0.92)*(0.65+0.35*Math.sin((p-0.08)/0.92*Math.PI*4));
+      }
       glowGroup.children.forEach(m=>{
         if(m.material) m.material.opacity=m.userData.baseOpacity*alpha;
       });
