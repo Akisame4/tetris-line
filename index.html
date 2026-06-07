@@ -606,7 +606,7 @@
   <div class="card" id="target-score-selector">
     <h2>終了得点</h2>
     <div class="target-score-btns">
-      <button class="target-score-btn" data-s="15">15pt🔧</button>
+      <button class="target-score-btn" data-s="100">100pt</button>
       <button class="target-score-btn active" data-s="250">250pt</button>
       <button class="target-score-btn" data-s="300">300pt</button>
       <button class="target-score-btn" data-s="500">500pt</button>
@@ -2690,6 +2690,25 @@ window.closeRules = () => document.getElementById('rules-overlay').classList.rem
       <div class="r-section">
         <h3>ゲーム概要</h3>
         <p>2〜4人で遊ぶオンライン <span class="r-accent">3D ターン制</span> パズル。全員が同じ <span class="r-accent">7×7×高さ</span> の立体盤面を共有し、順番に1つずつミノを積み上げます。<span class="r-accent">横列 or 奥行き列が7マス全て埋まる</span>とライン完成でポイント獲得。ゲーム終了時にスコアが最も高いプレイヤーの勝ちです。</p>
+      </div>
+
+      <!-- ゲームモード -->
+      <div class="r-section">
+        <h3>ゲームモード</h3>
+        <table class="r-table">
+          <tr>
+            <th>モード</th><th>説明</th>
+          </tr>
+          <tr>
+            <td>🧱 ビルドモード</td>
+            <td>ライン完成後もブロックは<strong>消えない</strong>。盤面はどんどん積み上がっていく。じっくり積み上げて高得点を狙うモード。</td>
+          </tr>
+          <tr>
+            <td>💥 ノーマルモード</td>
+            <td>ライン完成すると、その列のブロックが<span class="r-accent">光った後に消去</span>される。上のブロックが落ちてくる通常テトリスに近いモード。</td>
+          </tr>
+        </table>
+        <p class="r-note">※ モードはホストが待機室で選択します。</p>
       </div>
 
       <!-- 盤面とミノ -->
